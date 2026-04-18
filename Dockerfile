@@ -26,28 +26,27 @@ RUN npm prune --omit=dev
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 
+# tini: clean PID 1 signal handling. gosu: drop privileges at entrypoint.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends tini ca-certificates \
+  && apt-get install -y --no-install-recommends tini gosu ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \
     PORT=8080 \
     NEXUS_DATA_DIR=/data \
-    NEXUS_STATIC_DIR=/app/dist
+    NEXUS_STATIC_DIR=/app/dist \
+    PUID=99 \
+    PGID=100
 
-# Non-root user for safety; UID/GID are overridable at runtime via --user.
-# UID 1001 avoids collision with the base image's existing `node` user (UID 1000).
-RUN useradd --system --create-home --uid 1001 --shell /usr/sbin/nologin nexus \
-  && mkdir -p /data \
-  && chown -R nexus:nexus /data /app
+RUN mkdir -p /data
 
-COPY --from=build --chown=nexus:nexus /app/node_modules ./node_modules
-COPY --from=build --chown=nexus:nexus /app/dist ./dist
-COPY --from=build --chown=nexus:nexus /app/server ./server
-COPY --from=build --chown=nexus:nexus /app/base44 ./base44
-COPY --from=build --chown=nexus:nexus /app/package.json ./package.json
-
-USER nexus
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/server ./server
+COPY --from=build /app/base44 ./base44
+COPY --from=build /app/package.json ./package.json
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 VOLUME ["/data"]
 EXPOSE 8080
@@ -55,5 +54,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
+# tini runs as PID 1, then entrypoint.sh runs as root, sets up the PUID/PGID
+# user, chowns /data, and execs the CMD (node server/index.js) as that user.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["node", "server/index.js"]
