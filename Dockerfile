@@ -35,8 +35,9 @@ ENV NODE_ENV=production \
     NEXUS_DATA_DIR=/data \
     NEXUS_STATIC_DIR=/app/dist
 
-# Non-root user for safety; UID/GID are overridable at runtime via --user
-RUN useradd --system --create-home --uid 1000 --shell /usr/sbin/nologin nexus \
+# Non-root user for safety; UID/GID are overridable at runtime via --user.
+# UID 1001 avoids collision with the base image's existing `node` user (UID 1000).
+RUN useradd --system --create-home --uid 1001 --shell /usr/sbin/nologin nexus \
   && mkdir -p /data \
   && chown -R nexus:nexus /data /app
 
