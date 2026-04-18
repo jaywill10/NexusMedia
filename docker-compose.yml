@@ -1,0 +1,19 @@
+services:
+  nexusmedia:
+    image: ghcr.io/jaywill10/nexusmedia:latest
+    container_name: nexusmedia
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Optional: set a stable JWT secret. If unset, a random secret is
+      # generated on first boot and persisted at /data/.jwt-secret.
+      # NEXUS_JWT_SECRET: "change-me-to-a-long-random-string"
+      TZ: UTC
+    volumes:
+      # SQLite database + JWT secret live here. On Unraid, map this to
+      # /mnt/user/appdata/nexusmedia.
+      - ./data:/data
+      # Optional: expose your media library read-write for the future
+      # *arr-style file-management features (not used yet).
+      # - /mnt/user/media:/media
