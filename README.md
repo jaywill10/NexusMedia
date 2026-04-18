@@ -48,10 +48,12 @@ Open `http://<host>:8080/` — the first account you create becomes the admin.
 1. In **Docker → Add Container**, set:
    - **Repository**: `ghcr.io/jaywill10/nexusmedia:latest`
    - **Network Type**: Bridge
-   - **Port**: `8080` (Container) → `8080` (Host, or anything free)
+   - **Port**: `8080` (Container) → any free host port (e.g. `7345`)
    - **Volume**: `/data` (Container) → `/mnt/user/appdata/nexusmedia` (Host)
-2. Apply, then browse to `http://<tower>:8080` and create your admin account.
-3. (Optional) set `NEXUS_JWT_SECRET` to a long random string for stable token
+2. (Recommended on Unraid) leave the default env vars `PUID=99` and `PGID=100`
+   so the container writes to `/mnt/user/appdata/...` as `nobody:users`.
+3. Apply, then browse to `http://<tower>:<port>` and create your admin account.
+4. (Optional) set `NEXUS_JWT_SECRET` to a long random string for stable token
    signing across rebuilds; if unset, a secret is generated on first boot and
    persisted inside `/data`.
 
@@ -60,6 +62,8 @@ Open `http://<host>:8080/` — the first account you create becomes the admin.
 | Var | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `8080` | HTTP listen port |
+| `PUID` | `99` | UID the server runs as (Unraid: `99` = nobody) |
+| `PGID` | `100` | GID the server runs as (Unraid: `100` = users) |
 | `NEXUS_DATA_DIR` | `/data` | Directory for SQLite DB + JWT secret |
 | `NEXUS_DB_PATH` | `$NEXUS_DATA_DIR/nexus.db` | Override DB path |
 | `NEXUS_JWT_SECRET` | _(generated)_ | Override JWT signing secret |
