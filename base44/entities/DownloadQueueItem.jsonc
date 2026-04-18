@@ -1,0 +1,92 @@
+{
+  "name": "DownloadQueueItem",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series"
+      ]
+    },
+    "linked_id": {
+      "type": "string",
+      "description": "Movie or Series entity ID"
+    },
+    "season_number": {
+      "type": "number"
+    },
+    "episode_number": {
+      "type": "number"
+    },
+    "release_name": {
+      "type": "string"
+    },
+    "download_client_id": {
+      "type": "string"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "usenet",
+        "torrent"
+      ]
+    },
+    "quality": {
+      "type": "string"
+    },
+    "size": {
+      "type": "number"
+    },
+    "downloaded": {
+      "type": "number",
+      "default": 0
+    },
+    "progress": {
+      "type": "number",
+      "default": 0,
+      "description": "0-100"
+    },
+    "eta": {
+      "type": "string"
+    },
+    "speed": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "downloading",
+        "paused",
+        "completed",
+        "importing",
+        "imported",
+        "failed",
+        "warning",
+        "stalled"
+      ],
+      "default": "queued"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "indexer": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "added_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "title",
+    "status"
+  ]
+}

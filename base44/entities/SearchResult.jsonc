@@ -1,0 +1,85 @@
+{
+  "name": "SearchResult",
+  "type": "object",
+  "properties": {
+    "search_job_id": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series",
+        "episode"
+      ]
+    },
+    "media_id": {
+      "type": "string"
+    },
+    "media_title": {
+      "type": "string"
+    },
+    "season_number": {
+      "type": "number"
+    },
+    "episode_number": {
+      "type": "number"
+    },
+    "release_name": {
+      "type": "string"
+    },
+    "indexer": {
+      "type": "string"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "torrent",
+        "usenet"
+      ]
+    },
+    "size": {
+      "type": "number"
+    },
+    "age_hours": {
+      "type": "number"
+    },
+    "quality": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "seeders": {
+      "type": "number"
+    },
+    "leechers": {
+      "type": "number"
+    },
+    "custom_format_score": {
+      "type": "number",
+      "default": 0
+    },
+    "accepted": {
+      "type": "boolean",
+      "default": false
+    },
+    "rejection_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "grabbed": {
+      "type": "boolean",
+      "default": false
+    },
+    "grab_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "release_name"
+  ]
+}

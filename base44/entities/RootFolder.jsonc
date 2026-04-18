@@ -1,0 +1,37 @@
+{
+  "name": "RootFolder",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series",
+        "both"
+      ],
+      "default": "both"
+    },
+    "free_space": {
+      "type": "number",
+      "description": "Bytes"
+    },
+    "total_space": {
+      "type": "number",
+      "description": "Bytes"
+    },
+    "accessible": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "path"
+  ]
+}

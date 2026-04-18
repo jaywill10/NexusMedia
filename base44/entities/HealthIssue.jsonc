@@ -1,0 +1,37 @@
+{
+  "name": "HealthIssue",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning",
+        "info"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "description": "Component that reported the issue"
+    },
+    "message": {
+      "type": "string"
+    },
+    "wiki_url": {
+      "type": "string"
+    },
+    "resolved": {
+      "type": "boolean",
+      "default": false
+    },
+    "resolved_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "type",
+    "source",
+    "message"
+  ]
+}

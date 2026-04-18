@@ -1,0 +1,23 @@
+{
+  "name": "RemotePathMap",
+  "type": "object",
+  "properties": {
+    "host": {
+      "type": "string"
+    },
+    "remote_path": {
+      "type": "string"
+    },
+    "local_path": {
+      "type": "string"
+    },
+    "download_client_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "host",
+    "remote_path",
+    "local_path"
+  ]
+}

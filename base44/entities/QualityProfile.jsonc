@@ -1,0 +1,53 @@
+{
+  "name": "QualityProfile",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "cutoff_quality": {
+      "type": "string",
+      "description": "Quality level where upgrades stop"
+    },
+    "upgrade_allowed": {
+      "type": "boolean",
+      "default": true
+    },
+    "qualities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "preferred": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "min_custom_score": {
+      "type": "number",
+      "default": 0
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series",
+        "both"
+      ],
+      "default": "both"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

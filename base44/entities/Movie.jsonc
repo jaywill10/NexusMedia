@@ -1,0 +1,146 @@
+{
+  "name": "Movie",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "tmdb_id": {
+      "type": "string"
+    },
+    "imdb_id": {
+      "type": "string"
+    },
+    "year": {
+      "type": "number"
+    },
+    "overview": {
+      "type": "string"
+    },
+    "poster_url": {
+      "type": "string"
+    },
+    "backdrop_url": {
+      "type": "string"
+    },
+    "runtime": {
+      "type": "number",
+      "description": "Minutes"
+    },
+    "genres": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "studio": {
+      "type": "string"
+    },
+    "certification": {
+      "type": "string"
+    },
+    "original_language": {
+      "type": "string"
+    },
+    "rating": {
+      "type": "number"
+    },
+    "vote_count": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "announced",
+        "in_cinemas",
+        "released",
+        "deleted"
+      ],
+      "default": "released"
+    },
+    "library_status": {
+      "type": "string",
+      "enum": [
+        "missing",
+        "downloading",
+        "imported",
+        "available",
+        "cutoff_unmet",
+        "cutoff_met"
+      ],
+      "default": "missing"
+    },
+    "monitored": {
+      "type": "boolean",
+      "default": true
+    },
+    "quality_profile_id": {
+      "type": "string"
+    },
+    "root_folder_id": {
+      "type": "string"
+    },
+    "file_path": {
+      "type": "string"
+    },
+    "file_size": {
+      "type": "number",
+      "description": "Bytes"
+    },
+    "quality": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "video_codec": {
+      "type": "string"
+    },
+    "audio_codec": {
+      "type": "string"
+    },
+    "resolution": {
+      "type": "string"
+    },
+    "hdr_format": {
+      "type": "string"
+    },
+    "media_info": {
+      "type": "object"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "collection_name": {
+      "type": "string"
+    },
+    "collection_tmdb_id": {
+      "type": "string"
+    },
+    "digital_release_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "physical_release_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "theatrical_release_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "added_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trailer_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "name": "Request",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Display title of requested media"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series"
+      ],
+      "description": "Type of media"
+    },
+    "tmdb_id": {
+      "type": "string",
+      "description": "TMDB identifier"
+    },
+    "poster_url": {
+      "type": "string",
+      "description": "Poster image URL"
+    },
+    "backdrop_url": {
+      "type": "string",
+      "description": "Backdrop image URL"
+    },
+    "year": {
+      "type": "number",
+      "description": "Release year"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "submitted",
+        "pending_approval",
+        "approved",
+        "declined",
+        "auto_approved",
+        "processing",
+        "partially_available",
+        "available",
+        "failed",
+        "canceled"
+      ],
+      "default": "submitted"
+    },
+    "requested_by": {
+      "type": "string",
+      "description": "Email of requester"
+    },
+    "approved_by": {
+      "type": "string",
+      "description": "Email of approver"
+    },
+    "requested_seasons": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "Season numbers requested (TV only)"
+    },
+    "fulfilled_seasons": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "Season numbers fulfilled (TV only)"
+    },
+    "quality_profile_id": {
+      "type": "string",
+      "description": "Quality profile to use"
+    },
+    "root_folder_id": {
+      "type": "string",
+      "description": "Root folder for storage"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Request notes"
+    },
+    "admin_notes": {
+      "type": "string",
+      "description": "Admin notes"
+    },
+    "auto_search": {
+      "type": "boolean",
+      "default": true,
+      "description": "Search immediately on approval"
+    },
+    "linked_movie_id": {
+      "type": "string",
+      "description": "Linked Movie entity ID"
+    },
+    "linked_series_id": {
+      "type": "string",
+      "description": "Linked Series entity ID"
+    },
+    "approved_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "available_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "declined_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "decline_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "media_type",
+    "status"
+  ]
+}

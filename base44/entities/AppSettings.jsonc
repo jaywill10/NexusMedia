@@ -1,0 +1,17 @@
+{
+  "name": "AppSettings",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Setting key"
+    },
+    "value": {
+      "type": "string",
+      "description": "Setting value (JSON-serialized)"
+    }
+  },
+  "required": [
+    "key"
+  ]
+}

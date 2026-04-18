@@ -1,0 +1,76 @@
+{
+  "name": "Indexer",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "usenet",
+        "torrent"
+      ],
+      "default": "torrent"
+    },
+    "url": {
+      "type": "string"
+    },
+    "api_key": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "rss_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "auto_search_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "interactive_search_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "priority": {
+      "type": "number",
+      "default": 25
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "health_status": {
+      "type": "string",
+      "enum": [
+        "healthy",
+        "warning",
+        "error",
+        "unknown"
+      ],
+      "default": "unknown"
+    },
+    "last_sync": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "failure_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "url"
+  ]
+}

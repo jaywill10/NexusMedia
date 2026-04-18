@@ -1,0 +1,55 @@
+{
+  "name": "Season",
+  "type": "object",
+  "properties": {
+    "series_id": {
+      "type": "string",
+      "description": "Linked Series entity ID"
+    },
+    "season_number": {
+      "type": "number"
+    },
+    "title": {
+      "type": "string"
+    },
+    "overview": {
+      "type": "string"
+    },
+    "poster_url": {
+      "type": "string"
+    },
+    "episode_count": {
+      "type": "number"
+    },
+    "episodes_available": {
+      "type": "number",
+      "default": 0
+    },
+    "episodes_missing": {
+      "type": "number",
+      "default": 0
+    },
+    "monitored": {
+      "type": "boolean",
+      "default": true
+    },
+    "air_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "missing",
+        "partial",
+        "complete",
+        "cutoff_unmet"
+      ],
+      "default": "missing"
+    }
+  },
+  "required": [
+    "series_id",
+    "season_number"
+  ]
+}

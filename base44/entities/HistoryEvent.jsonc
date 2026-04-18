@@ -1,0 +1,77 @@
+{
+  "name": "HistoryEvent",
+  "type": "object",
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "requested",
+        "approved",
+        "declined",
+        "searched",
+        "grabbed",
+        "download_started",
+        "download_completed",
+        "download_failed",
+        "imported",
+        "import_failed",
+        "renamed",
+        "moved",
+        "deleted",
+        "upgraded",
+        "monitored",
+        "unmonitored",
+        "metadata_refreshed",
+        "blocklisted",
+        "retry",
+        "notification_sent",
+        "manual_import",
+        "quality_changed"
+      ]
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series",
+        "episode"
+      ]
+    },
+    "media_id": {
+      "type": "string"
+    },
+    "media_title": {
+      "type": "string"
+    },
+    "season_number": {
+      "type": "number"
+    },
+    "episode_number": {
+      "type": "number"
+    },
+    "details": {
+      "type": "string"
+    },
+    "source_info": {
+      "type": "string",
+      "description": "Release name, indexer, etc."
+    },
+    "quality": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string"
+    },
+    "success": {
+      "type": "boolean",
+      "default": true
+    },
+    "error_details": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_type",
+    "media_title"
+  ]
+}

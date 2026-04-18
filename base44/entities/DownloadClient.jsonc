@@ -1,0 +1,77 @@
+{
+  "name": "DownloadClient",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "qbittorrent",
+        "transmission",
+        "deluge",
+        "sabnzbd",
+        "nzbget",
+        "rtorrent",
+        "aria2"
+      ],
+      "default": "qbittorrent"
+    },
+    "host": {
+      "type": "string"
+    },
+    "port": {
+      "type": "number"
+    },
+    "username": {
+      "type": "string"
+    },
+    "password": {
+      "type": "string"
+    },
+    "use_ssl": {
+      "type": "boolean",
+      "default": false
+    },
+    "category": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "number",
+      "default": 1
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series",
+        "both"
+      ],
+      "default": "both"
+    },
+    "health_status": {
+      "type": "string",
+      "enum": [
+        "connected",
+        "disconnected",
+        "error",
+        "unknown"
+      ],
+      "default": "unknown"
+    },
+    "last_checked": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "name",
+    "type",
+    "host"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "UserProfile",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "description": "User email (required)"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "manager",
+        "standard",
+        "restricted",
+        "readonly"
+      ],
+      "default": "standard"
+    },
+    "auto_approve": {
+      "type": "boolean",
+      "default": false
+    },
+    "max_requests": {
+      "type": "number",
+      "default": 10
+    },
+    "allowed_media_types": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series",
+        "both"
+      ],
+      "default": "both"
+    },
+    "request_count": {
+      "type": "number",
+      "default": 0
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Per-user permission overrides: can_request_movies, can_request_series, can_request_partial_seasons, can_auto_approve, can_manage_library, can_run_searches, can_manual_import, can_delete_files, can_edit_settings"
+    }
+  },
+  "required": [
+    "email"
+  ]
+}

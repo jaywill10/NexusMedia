@@ -1,0 +1,38 @@
+{
+  "name": "BlocklistEntry",
+  "type": "object",
+  "properties": {
+    "release_name": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "movie",
+        "series"
+      ]
+    },
+    "media_id": {
+      "type": "string"
+    },
+    "media_title": {
+      "type": "string"
+    },
+    "indexer": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "usenet",
+        "torrent"
+      ]
+    }
+  },
+  "required": [
+    "release_name"
+  ]
+}

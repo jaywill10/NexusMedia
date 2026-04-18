@@ -1,0 +1,56 @@
+{
+  "name": "CustomFormat",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "include_when_renaming": {
+      "type": "boolean",
+      "default": false
+    },
+    "specifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "release_title",
+              "source",
+              "resolution",
+              "codec",
+              "audio",
+              "language",
+              "release_group",
+              "size",
+              "indexer_flag"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean",
+            "default": false
+          },
+          "negate": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "score": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

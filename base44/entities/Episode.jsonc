@@ -1,0 +1,75 @@
+{
+  "name": "Episode",
+  "type": "object",
+  "properties": {
+    "series_id": {
+      "type": "string"
+    },
+    "season_id": {
+      "type": "string"
+    },
+    "season_number": {
+      "type": "number"
+    },
+    "episode_number": {
+      "type": "number"
+    },
+    "title": {
+      "type": "string"
+    },
+    "overview": {
+      "type": "string"
+    },
+    "air_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "runtime": {
+      "type": "number"
+    },
+    "monitored": {
+      "type": "boolean",
+      "default": true
+    },
+    "has_file": {
+      "type": "boolean",
+      "default": false
+    },
+    "file_path": {
+      "type": "string"
+    },
+    "file_size": {
+      "type": "number"
+    },
+    "quality": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "video_codec": {
+      "type": "string"
+    },
+    "audio_codec": {
+      "type": "string"
+    },
+    "resolution": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "missing",
+        "downloading",
+        "available",
+        "cutoff_unmet"
+      ],
+      "default": "missing"
+    }
+  },
+  "required": [
+    "series_id",
+    "season_number",
+    "episode_number"
+  ]
+}

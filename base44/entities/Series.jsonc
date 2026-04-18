@@ -1,0 +1,149 @@
+{
+  "name": "Series",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "tmdb_id": {
+      "type": "string"
+    },
+    "imdb_id": {
+      "type": "string"
+    },
+    "tvdb_id": {
+      "type": "string"
+    },
+    "year": {
+      "type": "number"
+    },
+    "overview": {
+      "type": "string"
+    },
+    "poster_url": {
+      "type": "string"
+    },
+    "backdrop_url": {
+      "type": "string"
+    },
+    "network": {
+      "type": "string"
+    },
+    "genres": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "certification": {
+      "type": "string"
+    },
+    "original_language": {
+      "type": "string"
+    },
+    "rating": {
+      "type": "number"
+    },
+    "vote_count": {
+      "type": "number"
+    },
+    "series_status": {
+      "type": "string",
+      "enum": [
+        "continuing",
+        "ended",
+        "upcoming",
+        "canceled"
+      ],
+      "default": "continuing"
+    },
+    "series_type": {
+      "type": "string",
+      "enum": [
+        "standard",
+        "daily",
+        "anime"
+      ],
+      "default": "standard"
+    },
+    "total_seasons": {
+      "type": "number"
+    },
+    "total_episodes": {
+      "type": "number"
+    },
+    "monitored": {
+      "type": "boolean",
+      "default": true
+    },
+    "monitor_mode": {
+      "type": "string",
+      "enum": [
+        "all",
+        "future",
+        "missing",
+        "existing",
+        "pilot",
+        "first_season",
+        "none"
+      ],
+      "default": "all"
+    },
+    "monitored_seasons": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "quality_profile_id": {
+      "type": "string"
+    },
+    "root_folder_id": {
+      "type": "string"
+    },
+    "season_folder": {
+      "type": "boolean",
+      "default": true
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "episodes_available": {
+      "type": "number",
+      "default": 0
+    },
+    "episodes_missing": {
+      "type": "number",
+      "default": 0
+    },
+    "episodes_total": {
+      "type": "number",
+      "default": 0
+    },
+    "size_on_disk": {
+      "type": "number",
+      "default": 0
+    },
+    "next_airing": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "previous_airing": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "added_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trailer_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}
