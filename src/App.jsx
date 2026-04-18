@@ -1,10 +1,9 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 // Layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -28,26 +27,30 @@ import BlocklistPage from '@/pages/BlocklistPage';
 import UsersPage from '@/pages/UsersPage';
 import SettingsPage from '@/pages/SettingsPage';
 import SystemPage from '@/pages/SystemPage';
+import Login from '@/pages/Login';
+
+const LoadingScreen = () => (
+  <div className="fixed inset-0 flex items-center justify-center bg-background">
+    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
+
+const RequireAuth = ({ children }) => {
+  const { isAuthenticated, isLoadingAuth, isLoadingPublicSettings } = useAuth();
+  const location = useLocation();
+  if (isLoadingPublicSettings || isLoadingAuth) return <LoadingScreen />;
+  if (!isAuthenticated) {
+    const from = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?from=${from}`} replace />;
+  }
+  return children;
+};
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
-
-  if (isLoadingPublicSettings || isLoadingAuth) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (authError) {
-    if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
-    if (authError.type === 'auth_required') { navigateToLogin(); return null; }
-  }
-
   return (
     <Routes>
-      <Route element={<AppLayout />}>
+      <Route path="/login" element={<Login />} />
+      <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/discover" element={<Discover />} />
         <Route path="/discover/:mediaType/:tmdbId" element={<DiscoverDetail />} />

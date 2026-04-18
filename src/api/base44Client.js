@@ -1,14 +1,112 @@
-import { createClient } from '@base44/sdk';
-import { appParams } from '@/lib/app-params';
+// Local replacement for the Base44 SDK.
+// Exposes the same shape the rest of the frontend expects:
+//   base44.auth.{me, logout, redirectToLogin}
+//   base44.entities.<Name>.{list, filter, create, update, delete, get}
 
-const { appId, token, functionsVersion, appBaseUrl } = appParams;
+const ENTITY_NAMES = [
+  'AppSettings',
+  'BlocklistEntry',
+  'CustomFormat',
+  'DownloadClient',
+  'DownloadQueueItem',
+  'Episode',
+  'HealthIssue',
+  'HistoryEvent',
+  'Indexer',
+  'Movie',
+  'NotificationRule',
+  'QualityProfile',
+  'RemotePathMap',
+  'Request',
+  'RootFolder',
+  'SearchResult',
+  'Season',
+  'Series',
+  'Tag',
+  'UserProfile',
+];
 
-//Create a client with authentication required
-export const base44 = createClient({
-  appId,
-  token,
-  functionsVersion,
-  serverUrl: '',
-  requiresAuth: false,
-  appBaseUrl
-});
+async function api(path, { method = 'GET', body, signal } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  const res = await fetch(`/api${path}`, {
+    method,
+    credentials: 'include',
+    headers,
+    body: body == null ? undefined : JSON.stringify(body),
+    signal,
+  });
+  if (res.status === 204) return null;
+  const contentType = res.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json') ? await res.json() : await res.text();
+  if (!res.ok) {
+    const err = new Error(payload?.error || res.statusText);
+    err.status = res.status;
+    err.data = payload;
+    throw err;
+  }
+  return payload;
+}
+
+function entity(name) {
+  const base = `/entities/${name}`;
+  return {
+    async list(sort, limit) {
+      return api(base + buildQuery({ sort, limit }));
+    },
+    async filter(filter, sort, limit) {
+      return api(`${base}/query`, {
+        method: 'POST',
+        body: { filter, sort, limit },
+      });
+    },
+    async get(id) {
+      return api(`${base}/${encodeURIComponent(id)}`);
+    },
+    async create(data) {
+      return api(base, { method: 'POST', body: data });
+    },
+    async update(id, data) {
+      return api(`${base}/${encodeURIComponent(id)}`, { method: 'PATCH', body: data });
+    },
+    async delete(id) {
+      return api(`${base}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+  };
+}
+
+function buildQuery(params) {
+  const s = new URLSearchParams();
+  for (const [k, v] of Object.entries(params || {})) {
+    if (v == null) continue;
+    s.set(k, String(v));
+  }
+  const q = s.toString();
+  return q ? `?${q}` : '';
+}
+
+const entities = Object.fromEntries(ENTITY_NAMES.map((n) => [n, entity(n)]));
+
+const auth = {
+  async me() {
+    return api('/auth/me');
+  },
+  async login(email, password) {
+    return api('/auth/login', { method: 'POST', body: { email, password } });
+  },
+  async register(payload) {
+    return api('/auth/register', { method: 'POST', body: payload });
+  },
+  async logout() {
+    try { await api('/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+  },
+  redirectToLogin(fromUrl) {
+    const from = encodeURIComponent(fromUrl || window.location.href);
+    window.location.assign(`/login?from=${from}`);
+  },
+  async setupState() {
+    return api('/auth/setup');
+  },
+};
+
+export const base44 = { auth, entities };
+export default base44;
