@@ -14,13 +14,11 @@ This repo ships as one Docker image with:
 The image is published to GitHub Container Registry and is designed to install
 cleanly on Unraid with a single volume mount.
 
-> ⚠️ This release has the dockerized foundation (auth, storage, CRUD), plus
-> **TMDB-powered Discover / search / detail pages** and **Plex / Jellyfin
-> library sync** so existing media shows up as "available" automatically.
-> The *arr-style automation (Prowlarr/Jackett indexer integration,
-> qBittorrent/SAB download clients, release parsing, scoring, import/rename
-> engine, calendar sync) is **not yet** implemented — those are upcoming
-> features that build on this base.
+> This release includes the dockerized foundation (auth, storage, CRUD),
+> **TMDB-powered Discover / search / detail pages**, **Plex / Jellyfin
+> library sync**, and **Prowlarr / Jackett indexer integration** with
+> interactive search. Download-client integration (qBittorrent/SABnzbd),
+> the import/rename engine, and calendar sync are upcoming.
 
 ---
 
@@ -103,6 +101,35 @@ TMDB ID (Plex `Guid`, Jellyfin `ProviderIds.Tmdb`):
   "import existing library" behavior).
 - Any `Request` with that TMDB ID is flipped to `status = available`.
 
+## Indexer integration (Prowlarr / Jackett)
+
+Add a Torznab indexer under **Settings → Indexers**:
+
+- **Prowlarr**: copy the per-indexer Torznab URL from Prowlarr's indexer list
+  (e.g. `http://prowlarr:9696/1/api`) and your Prowlarr API key.
+- **Jackett**: use the Torznab URL Jackett shows for an indexer or the
+  aggregate endpoint (e.g. `http://jackett:9117/api/v2.0/indexers/all/results/torznab/api`)
+  and your Jackett API key.
+
+Click **Test** to verify the connection (a `t=caps` probe is sent).
+
+Once indexers are healthy, open any Movie or Series detail page and click
+**Interactive Search** to query all enabled indexers live. Results are
+sorted by custom-format score, filterable, and you can grab any release
+directly into the download queue.
+
+Auto Search finds the best accepted release automatically.
+
+### Search API endpoints (for power users / scripts)
+
+| Method | Path | Body |
+| --- | --- | --- |
+| `POST` | `/api/search/manual` | `{ q, indexer_ids? }` |
+| `POST` | `/api/search/movie` | `{ tmdb_id?, imdb_id?, title, year? }` |
+| `POST` | `/api/search/series` | `{ tvdb_id?, title, season?, episode? }` |
+
+All endpoints require authentication and return `{ results: [...] }`.
+
 ## Development
 
 ```bash
@@ -153,8 +180,8 @@ create the tables.
 Next work, on top of this base:
 
 - ~~TMDB metadata + Discover feed~~ ✅
-- Library sync (Plex / Jellyfin) to flip requests to "available" automatically
-- Indexer integration (Prowlarr / Jackett)
+- ~~Library sync (Plex / Jellyfin) to flip requests to "available" automatically~~ ✅
+- ~~Indexer integration (Prowlarr / Jackett)~~ ✅
 - Download-client integration (qBittorrent / SABnzbd)
 - Release-parsing, quality profiles and custom-format scoring
 - Import / rename / file-management engine

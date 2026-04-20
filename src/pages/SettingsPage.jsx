@@ -551,16 +551,43 @@ function TasksTab() {
   );
 }
 
+function IndexerHealthBadge({ status, message }) {
+  const map = {
+    healthy: 'bg-green-500/15 text-green-400 border-green-500/30',
+    warning: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+    error: 'bg-red-500/15 text-red-400 border-red-500/30',
+    unknown: 'bg-muted/50 text-muted-foreground border-border',
+  };
+  const cls = map[status] || map.unknown;
+  return (
+    <span title={message || status} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}>
+      {status === 'healthy' && <Check className="w-2.5 h-2.5" />}
+      {status === 'error' && <AlertCircle className="w-2.5 h-2.5" />}
+      {status === 'warning' && <AlertCircle className="w-2.5 h-2.5" />}
+      {(status === 'unknown' || !status) && <RefreshCw className="w-2.5 h-2.5" />}
+      {status || 'unknown'}
+    </span>
+  );
+}
+
 function IndexersTab() {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', url: '', api_key: '', type: 'torrent', priority: 25 });
+  const [draftTestResult, setDraftTestResult] = useState(null);
+  const [testingId, setTestingId] = useState(null);
 
   const { data: indexers = [] } = useQuery({ queryKey: ['indexers'], queryFn: () => base44.entities.Indexer.list(), initialData: [] });
 
   const createMutation = useMutation({
     mutationFn: () => base44.entities.Indexer.create({ ...form, health_status: 'unknown' }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['indexers'] }); setAdding(false); setForm({ name: '', url: '', api_key: '', type: 'torrent', priority: 25 }); toast.success('Indexer added'); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['indexers'] });
+      setAdding(false);
+      setForm({ name: '', url: '', api_key: '', type: 'torrent', priority: 25 });
+      setDraftTestResult(null);
+      toast.success('Indexer added');
+    },
   });
 
   const deleteMutation = useMutation({
@@ -573,11 +600,41 @@ function IndexersTab() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
   });
 
+  const testDraft = async () => {
+    if (!form.url) return;
+    setDraftTestResult(null);
+    setTestingId('draft');
+    try {
+      const res = await base44.indexers.testDraft({ name: form.name || 'Draft', url: form.url, api_key: form.api_key, type: form.type });
+      setDraftTestResult({ ok: true, cats: res.categories?.length ?? 0 });
+      toast.success('Connection successful');
+    } catch (err) {
+      setDraftTestResult({ ok: false, msg: err.message });
+      toast.error(`Test failed: ${err.message}`);
+    } finally {
+      setTestingId(null);
+    }
+  };
+
+  const testSaved = async (idx) => {
+    setTestingId(idx.id);
+    try {
+      const res = await base44.indexers.test(idx.id);
+      queryClient.invalidateQueries({ queryKey: ['indexers'] });
+      toast.success(`${idx.name}: ${res.categories?.length ?? 0} categories found`);
+    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['indexers'] });
+      toast.error(`${idx.name}: ${err.message}`);
+    } finally {
+      setTestingId(null);
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-muted-foreground">{indexers.length} indexer(s) configured</p>
-        <Button size="sm" onClick={() => setAdding(true)} className="gap-1.5"><Plus className="w-4 h-4" />Add Indexer</Button>
+        <Button size="sm" onClick={() => { setAdding(true); setDraftTestResult(null); }} className="gap-1.5"><Plus className="w-4 h-4" />Add Indexer</Button>
       </div>
       {adding && (
         <Card className="p-4 mb-4 border-primary/30">
@@ -589,30 +646,54 @@ function IndexersTab() {
                 <SelectContent><SelectItem value="torrent">Torrent</SelectItem><SelectItem value="usenet">Usenet</SelectItem></SelectContent>
               </Select>
             </div>
-            <div className="col-span-2"><Label className="text-xs">URL</Label><Input className="mt-1 font-mono text-xs" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://indexer.example.com" /></div>
+            <div className="col-span-2"><Label className="text-xs">Torznab URL</Label><Input className="mt-1 font-mono text-xs" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="http://prowlarr:9696/1/api  or  http://jackett:9117/api/v2.0/indexers/all/results/torznab/api" /></div>
             <div className="col-span-2"><Label className="text-xs">API Key</Label><Input className="mt-1 font-mono text-xs" value={form.api_key} onChange={e => setForm({ ...form, api_key: e.target.value })} type="password" placeholder="••••••••" /></div>
           </div>
+          {draftTestResult && (
+            <div className={`mb-3 p-2 rounded text-xs flex items-center gap-2 ${draftTestResult.ok ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+              {draftTestResult.ok ? <Check className="w-3 h-3 shrink-0" /> : <AlertCircle className="w-3 h-3 shrink-0" />}
+              {draftTestResult.ok ? `Connected — ${draftTestResult.cats} categories` : draftTestResult.msg}
+            </div>
+          )}
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
-            <Button size="sm" onClick={() => createMutation.mutate()} disabled={!form.name || !form.url}>Save</Button>
+            <Button variant="outline" size="sm" onClick={() => { setAdding(false); setDraftTestResult(null); }}>Cancel</Button>
+            <Button variant="outline" size="sm" onClick={testDraft} disabled={!form.url || testingId === 'draft'} className="gap-1.5">
+              {testingId === 'draft' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}Test
+            </Button>
+            <Button size="sm" onClick={() => createMutation.mutate()} disabled={!form.name || !form.url || createMutation.isPending}>Save</Button>
           </div>
         </Card>
       )}
       <Card>
         <Table>
-          <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>URL</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead>Enabled</TableHead><TableHead className="w-10"></TableHead></TableRow></TableHeader>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>URL</TableHead>
+              <TableHead>Priority</TableHead><TableHead>Health</TableHead>
+              <TableHead>Enabled</TableHead><TableHead className="w-24"></TableHead>
+            </TableRow>
+          </TableHeader>
           <TableBody>
             {indexers.length === 0 ? (
-              <TableRow><TableCell colSpan={7}><EmptyState icon={Database} title="No indexers configured" description="Indexers are required for automatic and manual searching" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={7}><EmptyState icon={Database} title="No indexers configured" description="Add a Prowlarr or Jackett Torznab endpoint to enable searching" /></TableCell></TableRow>
             ) : indexers.map(idx => (
               <TableRow key={idx.id}>
                 <TableCell className="font-medium text-sm">{idx.name}</TableCell>
-                <TableCell><StatusBadge status={idx.type === 'torrent' ? 'available' : 'processing'} /></TableCell>
+                <TableCell className="text-xs text-muted-foreground capitalize">{idx.type}</TableCell>
                 <TableCell className="text-xs text-muted-foreground font-mono max-w-[200px] truncate">{idx.url}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{idx.priority}</TableCell>
-                <TableCell><StatusBadge status={idx.health_status || 'unknown'} /></TableCell>
+                <TableCell>
+                  <IndexerHealthBadge status={idx.health_status} message={idx.failure_reason || idx.health_message} />
+                </TableCell>
                 <TableCell><Switch checked={idx.enabled !== false} onCheckedChange={v => updateMutation.mutate({ id: idx.id, data: { enabled: v } })} /></TableCell>
-                <TableCell><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(idx.id)}><Trash2 className="w-4 h-4" /></Button></TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs gap-1" onClick={() => testSaved(idx)} disabled={testingId === idx.id} title="Test connection">
+                      {testingId === idx.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}Test
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(idx.id)}><Trash2 className="w-4 h-4" /></Button>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
