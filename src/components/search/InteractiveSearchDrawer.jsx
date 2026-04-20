@@ -7,56 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Check, Download, Shield, ArrowUpDown, Loader2, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, Check, Download, Shield, ArrowUpDown, Loader2, Zap, AlertCircle, CheckCircle2, Database } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-
-// Generate mock release candidates
-function generateMockReleases(media) {
-  const title = media?.title || 'Unknown';
-  const year = media?.year || 2024;
-  const sources = ['BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'REMUX'];
-  const qualities = ['2160p', '1080p', '720p', '480p'];
-  const indexers = ['1337x', 'NZBGeek', 'RARBG', 'YTS', 'TorrentGalaxy'];
-  const groups = ['YIFY', 'FGT', 'SPARKS', 'NTG', 'EVO', 'FLUX'];
-
-  return Array.from({ length: 18 }, (_, i) => {
-    const quality = qualities[i % qualities.length];
-    const source = sources[i % sources.length];
-    const protocol = i % 3 === 0 ? 'usenet' : 'torrent';
-    const seeders = protocol === 'torrent' ? Math.floor(Math.random() * 800) + 1 : null;
-    const score = Math.floor(Math.random() * 100) - 20;
-    const size = quality === '2160p' ? (40 + Math.random() * 40) * 1e9 : quality === '1080p' ? (8 + Math.random() * 15) * 1e9 : (1 + Math.random() * 5) * 1e9;
-    const age = Math.floor(Math.random() * 720);
-    const relName = `${title.replace(/[^a-zA-Z0-9]/g, '.')}.${year}.${quality}.${source}-${groups[i % groups.length]}`;
-
-    // Acceptance logic
-    const rejectionReasons = [];
-    if (quality === '480p') rejectionReasons.push('Quality below minimum (720p required)');
-    if (score < 0) rejectionReasons.push(`Custom format score too low (${score} < 0)`);
-    if (seeders !== null && seeders < 5) rejectionReasons.push('Too few seeders (< 5)');
-    if (i === 3) rejectionReasons.push('Release group EVO is blocklisted');
-    if (i === 7) rejectionReasons.push('Wrong language (dubbed)');
-    if (i === 11) rejectionReasons.push('Cutoff already met — upgrade not allowed');
-
-    return {
-      id: `mock-${i}`,
-      release_name: relName,
-      quality,
-      source,
-      indexer: indexers[i % indexers.length],
-      protocol,
-      seeders,
-      size,
-      age_hours: age,
-      custom_format_score: score,
-      accepted: rejectionReasons.length === 0,
-      rejection_reasons: rejectionReasons,
-      grabbed: false,
-    };
-  });
-}
 
 const SORT_FIELDS = ['release_name', 'quality', 'size', 'age_hours', 'seeders', 'custom_format_score'];
 
@@ -65,35 +19,93 @@ export default function InteractiveSearchDrawer({ open, onClose, media, mediaTyp
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState(null);
   const [sortField, setSortField] = useState('custom_format_score');
   const [sortDir, setSortDir] = useState('desc');
   const [grabbed, setGrabbed] = useState({});
   const [blocklisted, setBlocklisted] = useState({});
   const [lastGrabbedName, setLastGrabbedName] = useState(null);
 
-  const handleSearch = useCallback(async () => {
+  const doSearch = useCallback(async () => {
     setIsSearching(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setResults(generateMockReleases(media));
-    setHasSearched(true);
-    setIsSearching(false);
-  }, [media]);
+    setSearchError(null);
+    try {
+      let res;
+      if (mediaType === 'movie') {
+        res = await base44.search.movie({
+          tmdb_id: media?.tmdb_id,
+          imdb_id: media?.imdb_id,
+          title: media?.title,
+          year: media?.year,
+        });
+      } else {
+        res = await base44.search.series({
+          tvdb_id: media?.tvdb_id,
+          tmdb_id: media?.tmdb_id,
+          title: media?.title,
+          season: seasonNumber,
+          episode: episodeNumber,
+        });
+      }
+      setResults(res.results || []);
+      setHasSearched(true);
+    } catch (err) {
+      setSearchError(err.message || 'Search failed');
+      setHasSearched(true);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [media, mediaType, seasonNumber, episodeNumber]);
+
+  const handleSearch = useCallback(async () => {
+    await doSearch();
+  }, [doSearch]);
 
   const handleAutoSearch = useCallback(async () => {
+    await doSearch();
+    // Auto-grab the best accepted result after state updates
+  }, [doSearch]);
+
+  // Separate effect-like callback to grab after auto-search results arrive
+  const handleAutoSearchAndGrab = useCallback(async () => {
     setIsSearching(true);
-    await new Promise(r => setTimeout(r, 1800));
-    const res = generateMockReleases(media);
-    setResults(res);
-    setHasSearched(true);
-    setIsSearching(false);
-    const best = res.find(r => r.accepted);
-    if (best) {
-      await grabRelease(best, true);
-      toast.success(`Auto Search: grabbed ${best.release_name}`);
-    } else {
-      toast.error('Auto Search: no acceptable releases found');
+    setSearchError(null);
+    try {
+      let res;
+      if (mediaType === 'movie') {
+        res = await base44.search.movie({
+          tmdb_id: media?.tmdb_id,
+          imdb_id: media?.imdb_id,
+          title: media?.title,
+          year: media?.year,
+        });
+      } else {
+        res = await base44.search.series({
+          tvdb_id: media?.tvdb_id,
+          tmdb_id: media?.tmdb_id,
+          title: media?.title,
+          season: seasonNumber,
+          episode: episodeNumber,
+        });
+      }
+      const releases = res.results || [];
+      setResults(releases);
+      setHasSearched(true);
+
+      const best = releases.find(r => r.accepted);
+      if (best) {
+        await grabRelease(best, true);
+        toast.success(`Auto Search: grabbed ${best.release_name}`);
+      } else {
+        toast.error('Auto Search: no acceptable releases found');
+      }
+    } catch (err) {
+      setSearchError(err.message || 'Search failed');
+      setHasSearched(true);
+    } finally {
+      setIsSearching(false);
     }
-  }, [media]);
+  }, [media, mediaType, seasonNumber, episodeNumber]);
 
   const grabRelease = async (release, silent = false) => {
     await base44.entities.DownloadQueueItem.create({
@@ -166,7 +178,7 @@ export default function InteractiveSearchDrawer({ open, onClose, media, mediaTyp
           <SheetTitle className="flex items-center justify-between">
             <span>Interactive Search — {media?.title}{seasonNumber != null ? ` S${String(seasonNumber).padStart(2,'0')}` : ''}{episodeNumber != null ? `E${String(episodeNumber).padStart(2,'0')}` : ''}</span>
             <div className="flex gap-2 mr-8">
-              <Button variant="outline" size="sm" onClick={handleAutoSearch} disabled={isSearching} className="gap-1.5">
+              <Button variant="outline" size="sm" onClick={handleAutoSearchAndGrab} disabled={isSearching} className="gap-1.5">
                 <Zap className="w-4 h-4" /> Auto Search
               </Button>
               <Button size="sm" onClick={handleSearch} disabled={isSearching} className="gap-1.5">
@@ -198,6 +210,16 @@ export default function InteractiveSearchDrawer({ open, onClose, media, mediaTyp
               <p className="font-medium">Querying indexers...</p>
             </div>
           )}
+          {hasSearched && !isSearching && searchError && (
+            <div className="m-4 p-4 rounded-lg bg-red-500/10 border border-red-500/30 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-400">Search failed</p>
+                <p className="text-xs text-muted-foreground mt-1">{searchError}</p>
+                <p className="text-xs text-muted-foreground mt-1">Make sure at least one indexer is configured and enabled in <span className="text-primary">Settings → Indexers</span>.</p>
+              </div>
+            </div>
+          )}
           {lastGrabbedName && (
             <div className="mx-4 mt-3 p-3 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center gap-3">
               <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
@@ -208,7 +230,14 @@ export default function InteractiveSearchDrawer({ open, onClose, media, mediaTyp
               <Link to="/queue" onClick={onClose} className="text-xs text-primary hover:underline shrink-0">View Queue →</Link>
             </div>
           )}
-          {hasSearched && !isSearching && (
+          {hasSearched && !isSearching && !searchError && results.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground">
+              <Database className="w-8 h-8 mb-2 opacity-40" />
+              <p className="font-medium text-sm">No releases found</p>
+              <p className="text-xs mt-1">Try different search terms or check your indexer configuration</p>
+            </div>
+          )}
+          {hasSearched && !isSearching && sorted.length > 0 && (
             <TooltipProvider>
               <Table>
                 <TableHeader>
@@ -241,7 +270,7 @@ export default function InteractiveSearchDrawer({ open, onClose, media, mediaTyp
                               <TooltipTrigger><AlertTriangle className="w-4 h-4 text-yellow-400" /></TooltipTrigger>
                               <TooltipContent className="max-w-xs">
                                 <ul className="space-y-0.5 text-xs">
-                                  {r.rejection_reasons.map((reason, i) => <li key={i}>• {reason}</li>)}
+                                  {(r.rejection_reasons || []).map((reason, i) => <li key={i}>• {reason}</li>)}
                                 </ul>
                               </TooltipContent>
                             </Tooltip>
@@ -250,7 +279,7 @@ export default function InteractiveSearchDrawer({ open, onClose, media, mediaTyp
                       </TableCell>
                       <TableCell className="font-mono text-xs max-w-[220px] truncate">{r.release_name}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {r.age_hours < 24 ? `${r.age_hours}h` : `${Math.floor(r.age_hours / 24)}d`}
+                        {r.age_hours == null ? '—' : r.age_hours < 24 ? `${r.age_hours}h` : `${Math.floor(r.age_hours / 24)}d`}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {r.size ? `${(r.size / 1e9).toFixed(1)} GB` : '—'}
@@ -264,7 +293,7 @@ export default function InteractiveSearchDrawer({ open, onClose, media, mediaTyp
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {r.protocol === 'torrent' ? r.seeders : '—'}
+                        {r.protocol === 'torrent' ? (r.seeders ?? '—') : '—'}
                       </TableCell>
                       <TableCell className={cn('text-xs font-medium', r.custom_format_score > 0 ? 'text-green-400' : r.custom_format_score < 0 ? 'text-red-400' : 'text-muted-foreground')}>
                         {r.custom_format_score > 0 ? '+' : ''}{r.custom_format_score}
@@ -282,7 +311,7 @@ export default function InteractiveSearchDrawer({ open, onClose, media, mediaTyp
                                 <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] cursor-help">Rejected</Badge>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs text-xs">
-                                {r.rejection_reasons.join('; ')}
+                                {(r.rejection_reasons || []).join('; ')}
                               </TooltipContent>
                             </Tooltip>
                           )

@@ -129,5 +129,17 @@ const mediaservers = {
   syncAll: () => api('/mediaservers/sync-all', { method: 'POST' }),
 };
 
-export const base44 = { auth, entities, tmdb, mediaservers };
+const indexers = {
+  status: () => api('/indexers/status'),
+  testDraft: (payload) => api('/indexers/test', { method: 'POST', body: payload }),
+  test: (id) => api(`/indexers/${encodeURIComponent(id)}/test`, { method: 'POST' }),
+};
+
+const search = {
+  manual: (body) => api('/search/manual', { method: 'POST', body }),
+  movie: (body) => api('/search/movie', { method: 'POST', body }),
+  series: (body) => api('/search/series', { method: 'POST', body }),
+};
+
+export const base44 = { auth, entities, tmdb, mediaservers, indexers, search };
 export default base44;
