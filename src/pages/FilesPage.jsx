@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import {
   FolderOpen, HardDrive, Film, AlertTriangle, Search, Upload,
-  MoreHorizontal, Tv, RefreshCw, Trash2
+  MoreHorizontal, Tv, RefreshCw, Trash2, Loader2, Pencil,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,32 +26,43 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import PageHeader from '@/components/shared/PageHeader';
-import StatusBadge from '@/components/shared/StatusBadge';
 import EmptyState from '@/components/shared/EmptyState';
 import StatsCard from '@/components/shared/StatsCard';
 import { toast } from 'sonner';
 
-const MOCK_FILES = [
-  { id: 1, file_path: '/downloads/complete/Oppenheimer.2023.BluRay.2160p.x265-GROUP/Oppenheimer.2023.BluRay.2160p.x265.mkv', parsed_title: 'Oppenheimer', parsed_year: 2023, parsed_quality: 'BluRay-2160p', status: 'Pending', movie_id: null },
-  { id: 2, file_path: '/downloads/complete/Dune.Part.Two.2024.WEBDL.1080p.DTS-HD.mkv', parsed_title: 'Dune Part Two', parsed_year: 2024, parsed_quality: 'WEBDL-1080p', status: 'Pending', movie_id: null },
-  { id: 3, file_path: '/downloads/complete/Poor.Things.2023.BluRay.1080p.x264.mkv', parsed_title: 'Poor Things', parsed_year: 2023, parsed_quality: 'BluRay-1080p', status: 'Pending', movie_id: null },
-  { id: 4, file_path: '/downloads/complete/Mission.Impossible.DeadReckoning.2023.4K.HDR.mkv', parsed_title: 'Mission Impossible Dead Reckoning', parsed_year: 2023, parsed_quality: 'BluRay-2160p', status: 'Pending', movie_id: null },
-  { id: 5, file_path: '/downloads/complete/The.Zone.of.Interest.2023.1080p.WEBDL.mkv', parsed_title: 'The Zone of Interest', parsed_year: 2023, parsed_quality: 'WEBDL-1080p', status: 'Pending', movie_id: null },
-];
+// Tiny path.basename substitute for the frontend
+const path = {
+  basename: (p) => (p || '').split('/').pop(),
+};
 
-function ManualImportSheet({ open, onClose, movies }) {
+function ManualImportSheet({ open, onClose, movies, series }) {
   const [scanPath, setScanPath] = useState('/downloads');
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [fileRows, setFileRows] = useState([]);
+  const [importingId, setImportingId] = useState(null);
   const queryClient = useQueryClient();
 
   const handleScan = async () => {
     setScanning(true);
-    await new Promise(r => setTimeout(r, 800));
-    setFileRows(MOCK_FILES.map(f => ({ ...f, movie_id: null, import_mode: 'Move' })));
-    setScanned(true);
-    setScanning(false);
+    setScanned(false);
+    try {
+      const res = await base44.imports.scan({ path: scanPath });
+      setFileRows((res.files || []).map(f => ({
+        ...f,
+        status: 'pending',
+        // auto-pick detected media type + match where available
+        media_type: f.media_type || 'movie',
+        media_id: f.match_id || null,
+        import_mode: null, // uses server default when null
+      })));
+      setScanned(true);
+      if (!res.files?.length) toast.warning(`No video files found in ${scanPath}`);
+    } catch (err) {
+      toast.error(err.message || 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
   };
 
   const updateRow = (id, key, val) => {
@@ -59,55 +70,65 @@ function ManualImportSheet({ open, onClose, movies }) {
   };
 
   const importRow = async (row) => {
-    if (!row.movie_id) { toast.error('Assign to a movie first'); return; }
-    const movie = movies.find(m => m.id === row.movie_id);
-    await base44.entities.Movie.update(row.movie_id, {
-      file_path: row.file_path,
-      quality: row.parsed_quality,
-      library_status: 'available',
-    });
-    await base44.entities.HistoryEvent.create({
-      event_type: 'manual_import',
-      media_type: 'movie',
-      media_id: row.movie_id,
-      media_title: movie?.title || row.parsed_title,
-      source_info: row.file_path,
-      quality: row.parsed_quality,
-      success: true,
-    });
-    setFileRows(prev => prev.map(r => r.id === row.id ? { ...r, status: 'Imported' } : r));
-    queryClient.invalidateQueries({ queryKey: ['files-movies'] });
-    toast.success(`Imported: ${movie?.title || row.parsed_title}`);
+    if (!row.media_id) { toast.error('Assign to a movie or series first'); return; }
+    setImportingId(row.id);
+    try {
+      const res = await base44.imports.process({
+        source_path: row.file_path,
+        media_type: row.media_type,
+        media_id: row.media_id,
+        season_number: row.parsed_season ?? undefined,
+        episode_number: row.parsed_episode ?? undefined,
+        import_mode: row.import_mode || undefined,
+      });
+      setFileRows(prev => prev.map(r => r.id === row.id ? { ...r, status: 'imported', dest: res.dest } : r));
+      queryClient.invalidateQueries({ queryKey: ['files-movies'] });
+      queryClient.invalidateQueries({ queryKey: ['files-episodes'] });
+      toast.success(`Imported: ${path.basename(res.dest || row.file_path)}`);
+    } catch (err) {
+      setFileRows(prev => prev.map(r => r.id === row.id ? { ...r, status: 'failed', error: err.message } : r));
+      toast.error(err.message || 'Import failed');
+    } finally {
+      setImportingId(null);
+    }
   };
 
   const importAll = async () => {
-    const matched = fileRows.filter(r => r.movie_id && r.status !== 'Imported');
+    const matched = fileRows.filter(r => r.media_id && r.status !== 'imported');
     if (!matched.length) { toast.error('No matched rows to import'); return; }
     for (const row of matched) await importRow(row);
   };
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-full max-w-5xl overflow-y-auto">
+      <SheetContent side="right" className="w-full max-w-6xl overflow-y-auto">
         <SheetHeader className="mb-4">
           <SheetTitle>Manual Import</SheetTitle>
         </SheetHeader>
         <div className="flex gap-2 mb-4">
-          <Input value={scanPath} onChange={e => setScanPath(e.target.value)} className="bg-secondary border-0 font-mono text-sm" />
-          <Button onClick={handleScan} disabled={scanning}>
-            {scanning ? 'Scanning…' : 'Scan'}
+          <Input
+            value={scanPath}
+            onChange={e => setScanPath(e.target.value)}
+            className="bg-secondary border-0 font-mono text-sm"
+            placeholder="/downloads/complete"
+          />
+          <Button onClick={handleScan} disabled={scanning || !scanPath}>
+            {scanning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Scanning…</> : 'Scan'}
           </Button>
         </div>
-        {scanned && (
+        {scanned && fileRows.length === 0 && (
+          <EmptyState icon={FolderOpen} title="No video files found" description={`Nothing to import in ${scanPath}`} />
+        )}
+        {scanned && fileRows.length > 0 && (
           <>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>File Path</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Year</TableHead>
+                    <TableHead>File</TableHead>
+                    <TableHead>Parsed</TableHead>
                     <TableHead>Quality</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Assign To</TableHead>
                     <TableHead>Mode</TableHead>
                     <TableHead>Status</TableHead>
@@ -115,46 +136,89 @@ function ManualImportSheet({ open, onClose, movies }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {fileRows.map(row => (
-                    <TableRow key={row.id}>
-                      <TableCell className="max-w-[200px] truncate font-mono text-xs text-muted-foreground" title={row.file_path}>{row.file_path}</TableCell>
-                      <TableCell className="text-sm">{row.parsed_title}</TableCell>
-                      <TableCell className="text-sm">{row.parsed_year}</TableCell>
-                      <TableCell className="text-sm">{row.parsed_quality}</TableCell>
-                      <TableCell className="min-w-[160px]">
-                        <Select value={row.movie_id || ''} onValueChange={v => updateRow(row.id, 'movie_id', v || null)}>
-                          <SelectTrigger className="h-7 text-xs bg-secondary border-0"><SelectValue placeholder="Assign…" /></SelectTrigger>
-                          <SelectContent>
-                            {movies.map(m => <SelectItem key={m.id} value={m.id}>{m.title} ({m.year})</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="min-w-[100px]">
-                        <Select value={row.import_mode} onValueChange={v => updateRow(row.id, 'import_mode', v)}>
-                          <SelectTrigger className="h-7 text-xs bg-secondary border-0"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Move">Move</SelectItem>
-                            <SelectItem value="Copy">Copy</SelectItem>
-                            <SelectItem value="Hardlink">Hardlink</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${row.status === 'Imported' ? 'text-green-400 border-green-500/30' : row.movie_id ? 'text-blue-400 border-blue-500/30' : ''}`}>
-                          {row.movie_id && row.status === 'Pending' ? 'Matched' : row.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {row.status !== 'Imported' && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => importRow(row)}>Import</Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {fileRows.map(row => {
+                    const candidates = row.media_type === 'series' ? series : movies;
+                    const isEpisode = row.media_type === 'series' && row.parsed_season != null && row.parsed_episode != null;
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell className="max-w-[240px] truncate font-mono text-xs text-muted-foreground" title={row.file_path}>
+                          {row.file_path.split('/').pop()}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <div className="font-medium">{row.parsed_title || '—'}</div>
+                          <div className="text-muted-foreground">
+                            {row.parsed_year && `${row.parsed_year} `}
+                            {isEpisode && `S${String(row.parsed_season).padStart(2,'0')}E${String(row.parsed_episode).padStart(2,'0')}`}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs">{row.parsed_quality || '—'}</TableCell>
+                        <TableCell>
+                          <Select value={row.media_type} onValueChange={v => updateRow(row.id, 'media_type', v)}>
+                            <SelectTrigger className="h-7 text-xs bg-secondary border-0 w-24"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="movie">Movie</SelectItem>
+                              <SelectItem value="series">Series</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="min-w-[200px]">
+                          <Select value={row.media_id || ''} onValueChange={v => updateRow(row.id, 'media_id', v || null)}>
+                            <SelectTrigger className="h-7 text-xs bg-secondary border-0"><SelectValue placeholder="Assign…" /></SelectTrigger>
+                            <SelectContent>
+                              {candidates.map(m => (
+                                <SelectItem key={m.id} value={m.id}>
+                                  {m.title}{m.year ? ` (${m.year})` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="min-w-[110px]">
+                          <Select value={row.import_mode || 'default'} onValueChange={v => updateRow(row.id, 'import_mode', v === 'default' ? null : v)}>
+                            <SelectTrigger className="h-7 text-xs bg-secondary border-0"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="default">Default</SelectItem>
+                              <SelectItem value="hardlink">Hardlink</SelectItem>
+                              <SelectItem value="move">Move</SelectItem>
+                              <SelectItem value="copy">Copy</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${
+                              row.status === 'imported' ? 'text-green-400 border-green-500/30' :
+                              row.status === 'failed' ? 'text-red-400 border-red-500/30' :
+                              row.media_id ? 'text-blue-400 border-blue-500/30' : ''
+                            }`}
+                            title={row.error || ''}
+                          >
+                            {row.status === 'imported' ? 'Imported' : row.status === 'failed' ? 'Failed' : row.media_id ? 'Matched' : 'Pending'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {row.status !== 'imported' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs gap-1"
+                              disabled={importingId === row.id || !row.media_id}
+                              onClick={() => importRow(row)}
+                            >
+                              {importingId === row.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                              Import
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setFileRows([])}>Clear</Button>
               <Button onClick={importAll}>Import All Matched</Button>
             </div>
           </>
@@ -168,7 +232,7 @@ export default function FilesPage() {
   const [search, setSearch] = useState('');
   const [episodeSearch, setEpisodeSearch] = useState('');
   const [manualImportOpen, setManualImportOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'movie'|'episode', item }
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: movies = [] } = useQuery({
@@ -189,12 +253,6 @@ export default function FilesPage() {
     initialData: [],
   });
 
-  const { data: rootFolders = [] } = useQuery({
-    queryKey: ['root-folders'],
-    queryFn: () => base44.entities.RootFolder.list(),
-    initialData: [],
-  });
-
   const updateMovieMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Movie.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['files-movies'] }),
@@ -203,6 +261,17 @@ export default function FilesPage() {
   const updateEpisodeMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Episode.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['files-episodes'] }),
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: (payload) => base44.imports.rename(payload),
+    onSuccess: (res) => {
+      if (res.unchanged) toast.info('Filename already matches naming template');
+      else toast.success(`Renamed to ${path.basename(res.dest)}`);
+      queryClient.invalidateQueries({ queryKey: ['files-movies'] });
+      queryClient.invalidateQueries({ queryKey: ['files-episodes'] });
+    },
+    onError: (err) => toast.error(err.message || 'Rename failed'),
   });
 
   const moviesWithFiles = movies.filter(m => m.file_path);
@@ -227,25 +296,17 @@ export default function FilesPage() {
     await updateMovieMutation.mutateAsync({ id: movie.id, data: { file_path: null, library_status: 'missing' } });
     await base44.entities.HistoryEvent.create({
       event_type: 'deleted', media_type: 'movie', media_id: movie.id,
-      media_title: movie.title, details: 'File deleted from Files page', success: true,
+      media_title: movie.title, details: 'File reference removed from Files page', success: true,
     });
-    toast.success(`Deleted: ${movie.title}`);
+    toast.success(`Deleted reference: ${movie.title}`);
     setDeleteTarget(null);
   };
 
   const handleDeleteEpisode = async () => {
     const ep = deleteTarget.item;
     await updateEpisodeMutation.mutateAsync({ id: ep.id, data: { has_file: false, file_path: null, status: 'missing' } });
-    toast.success('Episode file removed');
+    toast.success('Episode file reference removed');
     setDeleteTarget(null);
-  };
-
-  const handleRescanMovie = async (movie) => {
-    await base44.entities.HistoryEvent.create({
-      event_type: 'metadata_refreshed', media_type: 'movie', media_id: movie.id,
-      media_title: movie.title, success: true,
-    });
-    toast.success(`Rescanning: ${movie.title}`);
   };
 
   return (
@@ -292,7 +353,7 @@ export default function FilesPage() {
                 ) : filteredMovies.map(movie => (
                   <TableRow key={movie.id} className="group">
                     <TableCell className="font-medium text-sm">{movie.title}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono max-w-[200px] truncate">{movie.file_path}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono max-w-[200px] truncate" title={movie.file_path}>{movie.file_path}</TableCell>
                     <TableCell className="text-sm">{movie.quality || '—'}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {movie.file_size ? `${(movie.file_size / 1073741824).toFixed(1)} GB` : '—'}
@@ -306,18 +367,12 @@ export default function FilesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { toast.success(`Renaming: ${movie.title}`); }}>
-                            Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { toast.success(`Moving: ${movie.title}`); }}>
-                            Move
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleRescanMovie(movie)}>
-                            <RefreshCw className="w-4 h-4 mr-2" /> Rescan
+                          <DropdownMenuItem onClick={() => renameMutation.mutate({ media_type: 'movie', media_id: movie.id })}>
+                            <Pencil className="w-4 h-4 mr-2" /> Rename to template
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget({ type: 'movie', item: movie })}>
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete File
+                            <Trash2 className="w-4 h-4 mr-2" /> Remove reference
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -359,7 +414,7 @@ export default function FilesPage() {
                       S{String(ep.season_number).padStart(2,'0')}E{String(ep.episode_number).padStart(2,'0')}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{ep.title || '—'}</TableCell>
-                    <TableCell className="text-xs font-mono text-muted-foreground max-w-[160px] truncate">{ep.file_path || '—'}</TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground max-w-[160px] truncate" title={ep.file_path}>{ep.file_path || '—'}</TableCell>
                     <TableCell className="text-sm">{ep.quality || '—'}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {ep.file_size ? `${(ep.file_size / 1073741824).toFixed(1)} GB` : '—'}
@@ -372,12 +427,12 @@ export default function FilesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => toast.success('Rescanning episode...')}>
-                            <RefreshCw className="w-4 h-4 mr-2" /> Rescan
+                          <DropdownMenuItem onClick={() => renameMutation.mutate({ media_type: 'episode', media_id: ep.id })}>
+                            <Pencil className="w-4 h-4 mr-2" /> Rename to template
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget({ type: 'episode', item: ep })}>
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete File
+                            <Trash2 className="w-4 h-4 mr-2" /> Remove reference
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -390,14 +445,14 @@ export default function FilesPage() {
         </TabsContent>
       </Tabs>
 
-      <ManualImportSheet open={manualImportOpen} onClose={() => setManualImportOpen(false)} movies={movies} />
+      <ManualImportSheet open={manualImportOpen} onClose={() => setManualImportOpen(false)} movies={movies} series={series} />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete File</AlertDialogTitle>
+            <AlertDialogTitle>Remove file reference</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the file reference from the library. The physical file on disk is not deleted.
+              This removes the reference from the library. The physical file on disk is not deleted.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -406,7 +461,7 @@ export default function FilesPage() {
             <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => {
               if (deleteTarget?.type === 'movie') handleDeleteMovie();
               else handleDeleteEpisode();
-            }}>Delete</AlertDialogAction>
+            }}>Remove</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

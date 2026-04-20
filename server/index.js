@@ -8,6 +8,7 @@ import { entitiesRouter } from './entities.js';
 import { tmdbRouter } from './tmdb.js';
 import { mediaServersRouter } from './mediaservers.js';
 import { indexersRouter, searchRouter } from './indexers.js';
+import { importsRouter } from './imports.js';
 import { ENTITIES } from './schemas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,7 @@ app.use('/api/tmdb', tmdbRouter);
 app.use('/api/mediaservers', mediaServersRouter);
 app.use('/api/indexers', indexersRouter);
 app.use('/api/search', searchRouter);
+app.use('/api/imports', importsRouter);
 
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'not_found', path: req.path });

@@ -16,9 +16,10 @@ cleanly on Unraid with a single volume mount.
 
 > This release includes the dockerized foundation (auth, storage, CRUD),
 > **TMDB-powered Discover / search / detail pages**, **Plex / Jellyfin
-> library sync**, and **Prowlarr / Jackett indexer integration** with
-> interactive search. Download-client integration (qBittorrent/SABnzbd),
-> the import/rename engine, and calendar sync are upcoming.
+> library sync**, **Prowlarr / Jackett indexer integration** with
+> interactive search, and a **Sonarr/Radarr-style import & rename engine**
+> for Manual Import and file management. Download-client integration
+> (qBittorrent/SABnzbd) and calendar sync are upcoming.
 
 ---
 
@@ -130,6 +131,49 @@ Auto Search finds the best accepted release automatically.
 
 All endpoints require authentication and return `{ results: [...] }`.
 
+## Import & rename engine
+
+Configure how files are organised under **Settings → Media Management**:
+
+- **Import mode**: `hardlink` (default — zero extra disk usage when the
+  source and library live on the same filesystem; falls back to copy if
+  they don't), `copy`, or `move`.
+- **Naming templates** — Sonarr/Radarr-style tokens:
+  - Movies: `{Movie Title}`, `{Year}`, `{Quality Full}`, `{Resolution}`,
+    `{MediaInfo VideoCodec}`, `{MediaInfo AudioCodec}`, `{Edition Tags}`.
+  - Episodes: `{Series Title}`, `{season:00}`, `{episode:00}`,
+    `{Episode Title}`, `{Quality Full}`, `{Resolution}`,
+    `{MediaInfo VideoCodec}`, `{MediaInfo AudioCodec}`.
+- **Season folders** — organise episode files into `Season 01/` folders.
+
+Then on the **Files** page click **Manual Import**, point it at a folder
+(e.g. `/downloads/complete`), and NexusMedia will:
+
+1. Recursively find video files (`.mkv`, `.mp4`, `.avi`, …).
+2. Parse each filename to extract title / year / S##E## / quality / codec.
+3. Auto-match against existing Movies/Series where possible.
+4. Let you assign unmatched files manually and click **Import** to move or
+   hardlink each file into its final location, renamed to match your
+   template. The `Movie` / `Episode` entity is updated with the final
+   path, size, and parsed codec info; a `HistoryEvent` records the import.
+
+The **Files → Movie Files / Episode Files** tabs expose a **Rename to
+template** action per file, so you can bring previously-imported content
+in line with a changed naming template without re-downloading.
+
+### Import API endpoints
+
+| Method | Path | Body |
+| --- | --- | --- |
+| `GET`  | `/api/imports/settings` | — |
+| `PUT`  | `/api/imports/settings` | (settings patch) |
+| `POST` | `/api/imports/scan` | `{ path }` |
+| `POST` | `/api/imports/process` | `{ source_path, media_type, media_id, season_number?, episode_number?, import_mode? }` |
+| `POST` | `/api/imports/rename` | `{ media_type, media_id }` |
+| `POST` | `/api/imports/preview` | `{ media_type, media_id, source_path?, season_number?, episode_number? }` |
+
+Writes require admin.
+
 ## Development
 
 ```bash
@@ -182,9 +226,9 @@ Next work, on top of this base:
 - ~~TMDB metadata + Discover feed~~ ✅
 - ~~Library sync (Plex / Jellyfin) to flip requests to "available" automatically~~ ✅
 - ~~Indexer integration (Prowlarr / Jackett)~~ ✅
+- ~~Import / rename / file-management engine~~ ✅
 - Download-client integration (qBittorrent / SABnzbd)
-- Release-parsing, quality profiles and custom-format scoring
-- Import / rename / file-management engine
+- Quality profiles + custom-format scoring
 - Calendar + upcoming releases
 - Notification providers
 

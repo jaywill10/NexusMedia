@@ -141,5 +141,14 @@ const search = {
   series: (body) => api('/search/series', { method: 'POST', body }),
 };
 
-export const base44 = { auth, entities, tmdb, mediaservers, indexers, search };
+const imports = {
+  getSettings: () => api('/imports/settings'),
+  saveSettings: (body) => api('/imports/settings', { method: 'PUT', body }),
+  scan: (body) => api('/imports/scan', { method: 'POST', body }),
+  process: (body) => api('/imports/process', { method: 'POST', body }),
+  rename: (body) => api('/imports/rename', { method: 'POST', body }),
+  preview: (body) => api('/imports/preview', { method: 'POST', body }),
+};
+
+export const base44 = { auth, entities, tmdb, mediaservers, indexers, search, imports };
 export default base44;
