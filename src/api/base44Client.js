@@ -26,9 +26,10 @@ const ENTITY_NAMES = [
   'UserProfile',
 ];
 
-async function api(path, { method = 'GET', body, signal } = {}) {
+async function api(path, { method = 'GET', body, signal, query } = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  const res = await fetch(`/api${path}`, {
+  const qs = query ? buildQuery(query) : '';
+  const res = await fetch(`/api${path}${qs}`, {
     method,
     credentials: 'include',
     headers,
@@ -108,5 +109,16 @@ const auth = {
   },
 };
 
-export const base44 = { auth, entities };
+const tmdb = {
+  status: () => api('/tmdb/status'),
+  setApiKey: (api_key) => api('/tmdb/api-key', { method: 'POST', body: { api_key } }),
+  clearApiKey: () => api('/tmdb/api-key', { method: 'DELETE' }),
+  genres: () => api('/tmdb/genres'),
+  discover: (params) => api('/tmdb/discover', { query: params }),
+  search: (params) => api('/tmdb/search', { query: params }),
+  movie: (tmdbId) => api(`/tmdb/movie/${encodeURIComponent(tmdbId)}`),
+  series: (tmdbId) => api(`/tmdb/series/${encodeURIComponent(tmdbId)}`),
+};
+
+export const base44 = { auth, entities, tmdb };
 export default base44;

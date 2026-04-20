@@ -32,32 +32,16 @@ export default function AddMovieDialog({ onClose }) {
     setSearching(true);
     setSelected(null);
     setResults(null);
-    const res = await base44.integrations.Core.InvokeLLM({
-      prompt: `Search TMDB for movies matching "${query}". Return up to 6 results.`,
-      add_context_from_internet: true,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          results: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                title: { type: 'string' },
-                year: { type: 'number' },
-                tmdb_id: { type: 'string' },
-                overview: { type: 'string' },
-                poster_url: { type: 'string' },
-                rating: { type: 'number' },
-                genres: { type: 'array', items: { type: 'string' } },
-              }
-            }
-          }
-        }
-      }
-    });
-    setResults(res.results || []);
-    setSearching(false);
+    try {
+      const res = await base44.tmdb.search({ q: query });
+      setResults((res.movies || []).slice(0, 6));
+    } catch (err) {
+      const needsKey = err?.data?.error === 'no_api_key' || err?.data?.error === 'invalid_api_key';
+      toast.error(needsKey ? 'TMDB API key required — set one in Settings.' : (err?.data?.error || err.message || 'Search failed'));
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
   };
 
   const handleSubmit = async () => {

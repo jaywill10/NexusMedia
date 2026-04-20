@@ -14,11 +14,11 @@ This repo ships as one Docker image with:
 The image is published to GitHub Container Registry and is designed to install
 cleanly on Unraid with a single volume mount.
 
-> ⚠️ This release is the dockerized foundation: auth, storage, and CRUD are in
-> place. The *arr-style automation (TMDB metadata, Prowlarr/Jackett indexer
-> integration, qBittorrent/SAB download clients, release parsing, scoring,
-> import/rename engine, calendar sync) is **not yet** implemented — those are
-> upcoming features that build on this base.
+> ⚠️ This release has the dockerized foundation (auth, storage, CRUD) plus
+> **TMDB-powered Discover / search / detail pages**. The *arr-style automation
+> (Prowlarr/Jackett indexer integration, qBittorrent/SAB download clients,
+> release parsing, scoring, import/rename engine, calendar sync) is **not yet**
+> implemented — those are upcoming features that build on this base.
 
 ---
 
@@ -68,6 +68,20 @@ Open `http://<host>:8080/` — the first account you create becomes the admin.
 | `NEXUS_DB_PATH` | `$NEXUS_DATA_DIR/nexus.db` | Override DB path |
 | `NEXUS_JWT_SECRET` | _(generated)_ | Override JWT signing secret |
 | `NEXUS_STATIC_DIR` | `/app/dist` | Where the built frontend lives |
+| `TMDB_API_KEY` | _(unset)_ | TMDB v3 API key. If set, used instead of the one in Settings. |
+
+## TMDB (Discover / search)
+
+The Discover page, global search, and "Add Movie / Add Series" dialogs all
+talk to The Movie Database. You'll need a **free TMDB v3 API key**:
+
+1. Sign up at https://www.themoviedb.org and request a v3 API key
+   from `Settings → API`.
+2. In NexusMedia open **Settings → General → TMDB** and paste the key there,
+   or export it as the `TMDB_API_KEY` env var on the container.
+
+Responses are cached in SQLite (`tmdb_cache` table) for 1–24 hours, so you
+won't blow past TMDB's rate limits under normal use.
 
 ## Development
 
@@ -118,7 +132,8 @@ create the tables.
 
 Next work, on top of this base:
 
-- TMDB metadata + Discover feed
+- ~~TMDB metadata + Discover feed~~ ✅
+- Library sync (Plex / Jellyfin) to flip requests to "available" automatically
 - Indexer integration (Prowlarr / Jackett)
 - Download-client integration (qBittorrent / SABnzbd)
 - Release-parsing, quality profiles and custom-format scoring

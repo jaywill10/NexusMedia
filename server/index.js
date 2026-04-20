@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { authRouter, authMiddleware, userCount } from './auth.js';
 import { entitiesRouter } from './entities.js';
+import { tmdbRouter } from './tmdb.js';
 import { ENTITIES } from './schemas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -30,6 +31,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/entities', entitiesRouter);
+app.use('/api/tmdb', tmdbRouter);
 
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'not_found', path: req.path });
