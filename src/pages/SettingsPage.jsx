@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Settings, Database, HardDrive, Sliders, Bell, FolderOpen, Plus, Trash2, Play, Clock, Cog, Map, Film, Pencil, ChevronUp, ChevronDown, Star, Check, AlertCircle, ExternalLink } from 'lucide-react';
+import { Settings, Database, HardDrive, Sliders, Bell, FolderOpen, Plus, Trash2, Play, Clock, Cog, Map, Film, Pencil, ChevronUp, ChevronDown, Star, Check, AlertCircle, ExternalLink, Server, RefreshCw, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ export default function SettingsPage() {
           <TabsTrigger value="general"><Cog className="w-3.5 h-3.5 mr-1.5" />General</TabsTrigger>
           <TabsTrigger value="indexers"><Database className="w-3.5 h-3.5 mr-1.5" />Indexers</TabsTrigger>
           <TabsTrigger value="download-clients"><HardDrive className="w-3.5 h-3.5 mr-1.5" />Download Clients</TabsTrigger>
+          <TabsTrigger value="media-servers"><Server className="w-3.5 h-3.5 mr-1.5" />Media Servers</TabsTrigger>
           <TabsTrigger value="quality"><Sliders className="w-3.5 h-3.5 mr-1.5" />Quality Profiles</TabsTrigger>
           <TabsTrigger value="custom-formats"><Film className="w-3.5 h-3.5 mr-1.5" />Custom Formats</TabsTrigger>
           <TabsTrigger value="media-management"><FolderOpen className="w-3.5 h-3.5 mr-1.5" />Media Management</TabsTrigger>
@@ -42,6 +43,7 @@ export default function SettingsPage() {
         </TabsContent>
         <TabsContent value="indexers"><IndexersTab /></TabsContent>
         <TabsContent value="download-clients"><DownloadClientsTab /></TabsContent>
+        <TabsContent value="media-servers"><MediaServersTab /></TabsContent>
         <TabsContent value="quality"><QualityProfilesTab /></TabsContent>
         <TabsContent value="custom-formats"><CustomFormatsTab /></TabsContent>
         <TabsContent value="media-management"><MediaManagementTab /></TabsContent>
@@ -616,6 +618,215 @@ function IndexersTab() {
           </TableBody>
         </Table>
       </Card>
+    </div>
+  );
+}
+
+function MediaServersTab() {
+  const queryClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ name: '', type: 'plex', url: '', token: '', username: '', enabled: true });
+  const [testing, setTesting] = useState(false);
+
+  const { data: servers = [] } = useQuery({
+    queryKey: ['media-servers'],
+    queryFn: () => base44.entities.MediaServer.list(),
+    initialData: [],
+  });
+  const { data: statusData } = useQuery({
+    queryKey: ['media-servers-status'],
+    queryFn: () => base44.mediaservers.status(),
+    refetchInterval: 15000,
+  });
+
+  const statusById = Object.fromEntries((statusData?.servers || []).map((s) => [s.id, s]));
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['media-servers'] });
+    queryClient.invalidateQueries({ queryKey: ['media-servers-status'] });
+  };
+
+  const createMutation = useMutation({
+    mutationFn: () => base44.entities.MediaServer.create({ ...form, health_status: 'unknown' }),
+    onSuccess: () => {
+      invalidateAll();
+      setAdding(false);
+      setForm({ name: '', type: 'plex', url: '', token: '', username: '', enabled: true });
+      toast.success('Media server added');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.MediaServer.delete(id),
+    onSuccess: () => invalidateAll(),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.MediaServer.update(id, data),
+    onSuccess: () => invalidateAll(),
+  });
+
+  const testDraft = async () => {
+    if (!form.url || !form.token) return toast.error('URL and token are required');
+    setTesting(true);
+    try {
+      const res = await base44.mediaservers.testDraft({ type: form.type, url: form.url, token: form.token, username: form.username });
+      toast.success(`Connected to ${res.info?.name || form.type}`);
+    } catch (err) {
+      const code = err?.data?.error || err.message;
+      toast.error(code === 'unauthorized' ? 'Invalid token' : `Connection failed: ${code}`);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const testExisting = async (id) => {
+    try {
+      const res = await base44.mediaservers.test(id);
+      invalidateAll();
+      toast.success(`Connected to ${res.info?.name || 'server'}`);
+    } catch (err) {
+      invalidateAll();
+      const code = err?.data?.error || err.message;
+      toast.error(code === 'unauthorized' ? 'Invalid token' : `Connection failed: ${code}`);
+    }
+  };
+
+  const syncNow = async (id, name) => {
+    const t = toast.loading(`Syncing "${name}"...`);
+    try {
+      const res = await base44.mediaservers.sync(id);
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ['movies'] });
+      queryClient.invalidateQueries({ queryKey: ['series'] });
+      queryClient.invalidateQueries({ queryKey: ['requests'] });
+      queryClient.invalidateQueries({ queryKey: ['library-movies'] });
+      queryClient.invalidateQueries({ queryKey: ['library-series'] });
+      const r = res.result;
+      toast.success(
+        `Synced "${name}": ${r.movies_matched} movie(s), ${r.series_matched} series, ${r.requests_updated} request(s) updated`,
+        { id: t },
+      );
+    } catch (err) {
+      const code = err?.data?.error || err.message;
+      toast.error(`Sync failed: ${code}`, { id: t });
+    }
+  };
+
+  const healthBadge = (status, msg) => {
+    const cls = status === 'healthy'
+      ? 'bg-green-500/15 text-green-400 border-green-500/30'
+      : status === 'error'
+        ? 'bg-red-500/15 text-red-400 border-red-500/30'
+        : 'bg-secondary text-muted-foreground border-border';
+    const label = status === 'healthy' ? 'Connected' : status === 'error' ? 'Error' : 'Unknown';
+    return (
+      <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border ${cls}`} title={msg || ''}>
+        {status === 'healthy' && <Check className="w-3 h-3" />}
+        {status === 'error' && <AlertCircle className="w-3 h-3" />}
+        {label}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <p className="text-sm text-muted-foreground">
+          {servers.length} server(s). Syncs mark your existing library as "Available" and flip matching requests.
+        </p>
+        <Button size="sm" onClick={() => setAdding(true)} className="gap-1.5"><Plus className="w-4 h-4" />Add Server</Button>
+      </div>
+
+      {adding && (
+        <Card className="p-4 mb-4 border-primary/30">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div><Label className="text-xs">Name</Label><Input className="mt-1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Home Plex" /></div>
+            <div>
+              <Label className="text-xs">Type</Label>
+              <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="plex">Plex</SelectItem>
+                  <SelectItem value="jellyfin">Jellyfin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs">URL</Label>
+              <Input className="mt-1 font-mono text-xs" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder={form.type === 'plex' ? 'http://192.168.1.10:32400' : 'http://192.168.1.10:8096'} />
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs">{form.type === 'plex' ? 'X-Plex-Token' : 'API Key'}</Label>
+              <Input className="mt-1 font-mono text-xs" type="password" value={form.token} onChange={e => setForm({ ...form, token: e.target.value })} placeholder="••••••••" />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {form.type === 'plex'
+                  ? 'Get from browser dev tools on any Plex page, or https://support.plex.tv/articles/204059436'
+                  : 'Jellyfin → Dashboard → API Keys → New API Key'}
+              </p>
+            </div>
+            {form.type === 'jellyfin' && (
+              <div className="col-span-2">
+                <Label className="text-xs">Username (optional)</Label>
+                <Input className="mt-1" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder="Leave blank for the first admin user" />
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={testDraft} disabled={testing || !form.url || !form.token}>
+              {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Test Connection'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
+            <Button size="sm" onClick={() => createMutation.mutate()} disabled={!form.name || !form.url || !form.token}>Save</Button>
+          </div>
+        </Card>
+      )}
+
+      <div className="space-y-2">
+        {servers.length === 0 ? (
+          <Card className="p-8"><EmptyState icon={Server} title="No media servers" description="Connect Plex or Jellyfin to auto-mark your library as available" /></Card>
+        ) : servers.map(s => {
+          const status = statusById[s.id];
+          const lr = status?.last_sync_result;
+          return (
+            <Card key={s.id} className="p-4">
+              <div className="flex items-start gap-4">
+                <Server className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-sm">{s.name}</p>
+                    <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">{s.type}</span>
+                    {healthBadge(status?.health_status || s.health_status, status?.health_message || s.health_message)}
+                  </div>
+                  <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">{s.url}</p>
+                  {lr && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Last sync: {s.last_sync_date ? new Date(s.last_sync_date).toLocaleString() : '—'} · {lr.movies_matched} movies · {lr.series_matched} series · {lr.requests_updated} requests updated
+                      {(lr.created_movies + lr.created_series) > 0 && ` · +${lr.created_movies + lr.created_series} new`}
+                      {lr.errors?.length > 0 && ` · ${lr.errors.length} error(s)`}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <Switch
+                    checked={s.enabled !== false}
+                    onCheckedChange={v => updateMutation.mutate({ id: s.id, data: { enabled: v } })}
+                  />
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => testExisting(s.id)} title="Test connection">
+                    <Check className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => syncNow(s.id, s.name)} disabled={s.enabled === false} title="Sync now">
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(s.id)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -14,11 +14,13 @@ This repo ships as one Docker image with:
 The image is published to GitHub Container Registry and is designed to install
 cleanly on Unraid with a single volume mount.
 
-> ⚠️ This release has the dockerized foundation (auth, storage, CRUD) plus
-> **TMDB-powered Discover / search / detail pages**. The *arr-style automation
-> (Prowlarr/Jackett indexer integration, qBittorrent/SAB download clients,
-> release parsing, scoring, import/rename engine, calendar sync) is **not yet**
-> implemented — those are upcoming features that build on this base.
+> ⚠️ This release has the dockerized foundation (auth, storage, CRUD), plus
+> **TMDB-powered Discover / search / detail pages** and **Plex / Jellyfin
+> library sync** so existing media shows up as "available" automatically.
+> The *arr-style automation (Prowlarr/Jackett indexer integration,
+> qBittorrent/SAB download clients, release parsing, scoring, import/rename
+> engine, calendar sync) is **not yet** implemented — those are upcoming
+> features that build on this base.
 
 ---
 
@@ -82,6 +84,24 @@ talk to The Movie Database. You'll need a **free TMDB v3 API key**:
 
 Responses are cached in SQLite (`tmdb_cache` table) for 1–24 hours, so you
 won't blow past TMDB's rate limits under normal use.
+
+## Plex / Jellyfin library sync
+
+Add your existing media server under **Settings → Media Servers**:
+
+- **Plex**: the base URL (e.g. `http://192.168.1.10:32400`) and your
+  `X-Plex-Token` (grab it from [plex.tv article #204059436](https://support.plex.tv/articles/204059436/)).
+- **Jellyfin**: the base URL (e.g. `http://192.168.1.10:8096`) and an API
+  key created at `Dashboard → API Keys`. Optionally specify which user's
+  library to scan.
+
+Hit **Sync now** to scan everything. For each item whose metadata exposes a
+TMDB ID (Plex `Guid`, Jellyfin `ProviderIds.Tmdb`):
+
+- The matching `Movie` / `Series` is flagged `library_status = available`.
+- If no local entry exists yet, one is created (just like Sonarr/Radarr's
+  "import existing library" behavior).
+- Any `Request` with that TMDB ID is flipped to `status = available`.
 
 ## Development
 
