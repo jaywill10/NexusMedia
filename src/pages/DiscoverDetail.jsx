@@ -12,33 +12,9 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import RequestDialog from '@/components/discover/RequestDialog';
 import { cn } from '@/lib/utils';
 
-const TMDB_BASE = 'https://api.themoviedb.org/3';
-const TMDB_IMAGE = 'https://image.tmdb.org/t/p';
-
 async function fetchTmdbDetail(mediaType, tmdbId) {
-  const res = await base44.integrations.Core.InvokeLLM({
-    prompt: `Return detailed metadata for the ${mediaType === 'movie' ? 'movie' : 'TV show'} with TMDB ID ${tmdbId}. Make up realistic data that matches a real-sounding ${mediaType}.
-Include: title, year, overview (2-3 sentences), genres (array of strings), rating (7.0-9.0), vote_count, runtime_or_seasons, certification, original_language, poster_url (use https://image.tmdb.org/t/p/w500/placeholder.jpg as fallback), backdrop_url, total_seasons (for TV).`,
-    response_json_schema: {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        year: { type: 'number' },
-        overview: { type: 'string' },
-        genres: { type: 'array', items: { type: 'string' } },
-        rating: { type: 'number' },
-        vote_count: { type: 'number' },
-        runtime: { type: 'number' },
-        total_seasons: { type: 'number' },
-        certification: { type: 'string' },
-        original_language: { type: 'string' },
-        poster_url: { type: 'string' },
-        backdrop_url: { type: 'string' },
-        network: { type: 'string' },
-      }
-    }
-  });
-  return res;
+  if (mediaType === 'movie') return base44.tmdb.movie(tmdbId);
+  return base44.tmdb.series(tmdbId);
 }
 
 export default function DiscoverDetail() {
@@ -47,10 +23,11 @@ export default function DiscoverDetail() {
   const [selectedSeasons, setSelectedSeasons] = useState([]);
   const [requestItem, setRequestItem] = useState(null);
 
-  const { data: detail, isLoading } = useQuery({
+  const { data: detail, isLoading, error } = useQuery({
     queryKey: ['discover-detail', mediaType, tmdbId],
     queryFn: () => fetchTmdbDetail(mediaType, tmdbId),
     staleTime: 10 * 60 * 1000,
+    retry: false,
   });
 
   const { data: existingMovies = [] } = useQuery({
@@ -122,7 +99,27 @@ export default function DiscoverDetail() {
     );
   }
 
-  if (!detail) return <div className="text-center py-16 text-muted-foreground">Failed to load details</div>;
+  if (error || !detail) {
+    const needsKey = error?.data?.error === 'no_api_key' || error?.data?.error === 'invalid_api_key';
+    return (
+      <div className="text-center py-16">
+        <Button variant="ghost" size="sm" className="mb-4 gap-1.5" onClick={() => navigate(-1)}>
+          <ArrowLeft className="w-4 h-4" /> Back
+        </Button>
+        <p className="text-sm font-medium mb-1">
+          {needsKey ? 'TMDB API key required' : 'Failed to load details'}
+        </p>
+        <p className="text-xs text-muted-foreground max-w-md mx-auto">
+          {needsKey
+            ? 'Add a free TMDB v3 API key in Settings → General.'
+            : (error?.data?.error || error?.message || '')}
+        </p>
+        {needsKey && (
+          <Button asChild size="sm" className="mt-4"><Link to="/settings">Open Settings</Link></Button>
+        )}
+      </div>
+    );
+  }
 
   const seasons = detail.total_seasons > 0
     ? Array.from({ length: detail.total_seasons }, (_, i) => i + 1)

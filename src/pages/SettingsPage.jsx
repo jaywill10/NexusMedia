@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Settings, Database, HardDrive, Sliders, Bell, FolderOpen, Plus, Trash2, Play, Clock, Cog, Map, Film, Pencil, ChevronUp, ChevronDown, Star } from 'lucide-react';
+import { Settings, Database, HardDrive, Sliders, Bell, FolderOpen, Plus, Trash2, Play, Clock, Cog, Map, Film, Pencil, ChevronUp, ChevronDown, Star, Check, AlertCircle, ExternalLink } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,12 @@ export default function SettingsPage() {
           <TabsTrigger value="notifications"><Bell className="w-3.5 h-3.5 mr-1.5" />Notifications</TabsTrigger>
           <TabsTrigger value="tasks"><Clock className="w-3.5 h-3.5 mr-1.5" />Tasks</TabsTrigger>
         </TabsList>
-        <TabsContent value="general"><GeneralTab /></TabsContent>
+        <TabsContent value="general">
+          <div className="space-y-6">
+            <GeneralTab />
+            <TmdbCard />
+          </div>
+        </TabsContent>
         <TabsContent value="indexers"><IndexersTab /></TabsContent>
         <TabsContent value="download-clients"><DownloadClientsTab /></TabsContent>
         <TabsContent value="quality"><QualityProfilesTab /></TabsContent>
@@ -58,6 +63,128 @@ const DEFAULT_GENERAL = {
   search_on_add: true,
   minimum_availability: 'released',
 };
+
+function TmdbCard() {
+  const queryClient = useQueryClient();
+  const [apiKey, setApiKey] = useState('');
+  const [showForm, setShowForm] = useState(false);
+
+  const { data: status, isLoading } = useQuery({
+    queryKey: ['tmdb-status'],
+    queryFn: () => base44.tmdb.status(),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (k) => base44.tmdb.setApiKey(k),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tmdb-status'] });
+      queryClient.invalidateQueries({ queryKey: ['discover'] });
+      setApiKey('');
+      setShowForm(false);
+      toast.success('TMDB API key saved');
+    },
+    onError: (err) => {
+      const code = err?.data?.error;
+      toast.error(code === 'invalid_api_key' ? 'Invalid API key' : (code || err.message || 'Save failed'));
+    },
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: () => base44.tmdb.clearApiKey(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tmdb-status'] });
+      queryClient.invalidateQueries({ queryKey: ['discover'] });
+      toast.success('TMDB API key removed');
+    },
+    onError: (err) => toast.error(err?.data?.message || err?.data?.error || 'Could not remove key'),
+  });
+
+  const fromEnv = status?.source === 'env';
+  const configured = !!status?.configured;
+
+  return (
+    <Card className="p-6 max-w-xl">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <p className="font-semibold">TMDB</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Powers the Discover page, search, and metadata.
+          </p>
+        </div>
+        {!isLoading && (
+          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border ${
+            configured
+              ? 'bg-green-500/15 text-green-400 border-green-500/30'
+              : 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'
+          }`}>
+            {configured
+              ? <><Check className="w-3 h-3" /> Connected{fromEnv ? ' (env)' : ''}</>
+              : <><AlertCircle className="w-3 h-3" /> Not configured</>}
+          </span>
+        )}
+      </div>
+
+      {fromEnv ? (
+        <p className="text-xs text-muted-foreground">
+          The API key is supplied via the <code className="font-mono">TMDB_API_KEY</code> environment
+          variable. Unset it to manage the key here.
+        </p>
+      ) : configured && !showForm ? (
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>Replace key</Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={() => clearMutation.mutate()}
+            disabled={clearMutation.isPending}
+          >
+            Remove key
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">API Key (v3)</Label>
+            <Input
+              className="mt-1 font-mono text-xs"
+              type="password"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="Paste your TMDB v3 API key"
+              autoComplete="off"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1.5 inline-flex items-center gap-1">
+              Get a free key at
+              <a
+                href="https://www.themoviedb.org/settings/api"
+                target="_blank"
+                rel="noreferrer"
+                className="underline inline-flex items-center gap-0.5"
+              >
+                themoviedb.org/settings/api <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => saveMutation.mutate(apiKey.trim())}
+              disabled={!apiKey.trim() || saveMutation.isPending}
+            >
+              {saveMutation.isPending ? 'Validating…' : 'Save key'}
+            </Button>
+            {configured && (
+              <Button size="sm" variant="ghost" onClick={() => { setShowForm(false); setApiKey(''); }}>
+                Cancel
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function GeneralTab() {
   const queryClient = useQueryClient();
