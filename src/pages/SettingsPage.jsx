@@ -373,16 +373,30 @@ function CustomFormatsTab() {
 }
 
 function MediaManagementTab() {
-  const [form, setForm] = useState({
-    import_mode: 'hardlink',
-    rename_movies: true,
-    movie_naming: '{Movie Title} ({Year}) {Quality Full}',
-    rename_series: true,
-    series_naming: '{Series Title} - S{season:00}E{episode:00} - {Episode Title}',
-    season_folder: true,
-    empty_folder_cleanup: false,
-    recycle_bin_path: '',
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState(null);
+
+  const { data: settings } = useQuery({
+    queryKey: ['media-management-settings'],
+    queryFn: () => base44.imports.getSettings(),
   });
+
+  useEffect(() => {
+    if (settings && !form) setForm(settings);
+  }, [settings, form]);
+
+  const saveMutation = useMutation({
+    mutationFn: (payload) => base44.imports.saveSettings(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['media-management-settings'] });
+      toast.success('Media management settings saved');
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  if (!form) {
+    return <Card className="p-6 max-w-2xl"><p className="text-sm text-muted-foreground">Loading…</p></Card>;
+  }
 
   return (
     <Card className="p-6 max-w-2xl">
@@ -397,6 +411,7 @@ function MediaManagementTab() {
               </div>
             ))}
           </RadioGroup>
+          <p className="text-[10px] text-muted-foreground mt-2">Hardlink keeps the original in your download folder (zero extra disk usage on the same filesystem). Falls back to copy if the source and library are on different filesystems.</p>
         </div>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -407,7 +422,7 @@ function MediaManagementTab() {
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">Movie Naming Format</Label>
               <Input value={form.movie_naming} onChange={e => setForm({ ...form, movie_naming: e.target.value })} className="font-mono text-xs" />
-              <p className="text-[10px] text-muted-foreground mt-1">Tokens: {'{Movie Title}'} {'{Year}'} {'{Quality Full}'} {'{MediaInfo VideoCodec}'} {'{Edition Tags}'}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Tokens: {'{Movie Title}'} {'{Year}'} {'{Quality Full}'} {'{Resolution}'} {'{MediaInfo VideoCodec}'} {'{Edition Tags}'}</p>
             </div>
           )}
         </div>
@@ -420,6 +435,7 @@ function MediaManagementTab() {
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">Episode Naming Format</Label>
               <Input value={form.series_naming} onChange={e => setForm({ ...form, series_naming: e.target.value })} className="font-mono text-xs" />
+              <p className="text-[10px] text-muted-foreground mt-1">Tokens: {'{Series Title}'} {'{season:00}'} {'{episode:00}'} {'{Episode Title}'} {'{Quality Full}'}</p>
             </div>
           )}
         </div>
@@ -435,7 +451,9 @@ function MediaManagementTab() {
           <Label className="text-xs">Recycle Bin Path</Label>
           <Input className="mt-1 font-mono text-xs" value={form.recycle_bin_path} onChange={e => setForm({ ...form, recycle_bin_path: e.target.value })} placeholder="/media/.trash" />
         </div>
-        <Button onClick={() => toast.success('Media management settings saved')}>Save Changes</Button>
+        <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>
+          {saveMutation.isPending ? 'Saving…' : 'Save Changes'}
+        </Button>
       </div>
     </Card>
   );
