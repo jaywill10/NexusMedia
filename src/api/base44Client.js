@@ -13,6 +13,7 @@ const ENTITY_NAMES = [
   'HealthIssue',
   'HistoryEvent',
   'Indexer',
+  'MediaServer',
   'Movie',
   'NotificationRule',
   'QualityProfile',
@@ -120,5 +121,13 @@ const tmdb = {
   series: (tmdbId) => api(`/tmdb/series/${encodeURIComponent(tmdbId)}`),
 };
 
-export const base44 = { auth, entities, tmdb };
+const mediaservers = {
+  status: () => api('/mediaservers/status'),
+  testDraft: (payload) => api('/mediaservers/test', { method: 'POST', body: payload }),
+  test: (id) => api(`/mediaservers/${encodeURIComponent(id)}/test`, { method: 'POST' }),
+  sync: (id) => api(`/mediaservers/${encodeURIComponent(id)}/sync`, { method: 'POST' }),
+  syncAll: () => api('/mediaservers/sync-all', { method: 'POST' }),
+};
+
+export const base44 = { auth, entities, tmdb, mediaservers };
 export default base44;
