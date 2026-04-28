@@ -127,6 +127,7 @@ const mediaservers = {
   test: (id) => api(`/mediaservers/${encodeURIComponent(id)}/test`, { method: 'POST' }),
   sync: (id) => api(`/mediaservers/${encodeURIComponent(id)}/sync`, { method: 'POST' }),
   syncAll: () => api('/mediaservers/sync-all', { method: 'POST' }),
+  refreshMetadata: (limit) => api('/mediaservers/refresh-metadata', { method: 'POST', body: { limit } }),
 };
 
 const indexers = {

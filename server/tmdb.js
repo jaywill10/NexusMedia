@@ -114,6 +114,52 @@ function clearGenreCache() { movieGenresCache = null; tvGenresCache = null; }
 function poster(p, size = 'w500') { return p ? `${TMDB_IMAGE}/${size}${p}` : null; }
 function backdrop(p, size = 'w1280') { return p ? `${TMDB_IMAGE}/${size}${p}` : null; }
 
+// Exported helpers for other modules (e.g. library sync) to enrich items with
+// poster art and other TMDB metadata without re-implementing the fetch logic.
+export async function fetchTmdbDetails(mediaType, tmdbId) {
+  if (!getApiKey()) return null;
+  const path = mediaType === 'series' ? `/tv/${tmdbId}` : `/movie/${tmdbId}`;
+  try {
+    const data = await tmdbFetch(path, {}, { ttlMs: 24 * 60 * 60_000 });
+    if (mediaType === 'series') {
+      return {
+        title: data.name || data.original_name,
+        year: data.first_air_date ? Number(data.first_air_date.slice(0, 4)) : null,
+        overview: data.overview || '',
+        poster_url: poster(data.poster_path),
+        backdrop_url: backdrop(data.backdrop_path),
+        rating: data.vote_average || 0,
+        vote_count: data.vote_count || 0,
+        genres: (data.genres || []).map((g) => g.name),
+        original_language: data.original_language,
+        runtime: data.episode_run_time?.[0] || null,
+        first_air_date: data.first_air_date || null,
+        status: data.status,
+      };
+    }
+    return {
+      title: data.title || data.original_title,
+      year: data.release_date ? Number(data.release_date.slice(0, 4)) : null,
+      overview: data.overview || '',
+      poster_url: poster(data.poster_path),
+      backdrop_url: backdrop(data.backdrop_path),
+      rating: data.vote_average || 0,
+      vote_count: data.vote_count || 0,
+      genres: (data.genres || []).map((g) => g.name),
+      original_language: data.original_language,
+      runtime: data.runtime || null,
+      release_date: data.release_date || null,
+      status: data.status,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function isTmdbConfigured() {
+  return !!getApiKey();
+}
+
 function normalizeMovie(m, genres = null) {
   const names = (m.genre_ids || [])
     .map((id) => genres?.byId[id])

@@ -597,8 +597,27 @@ function IndexersTab() {
 
   const { data: indexers = [] } = useQuery({ queryKey: ['indexers'], queryFn: () => base44.entities.Indexer.list(), initialData: [] });
 
+  // Normalise the form right before save: trim whitespace and pull an apikey
+  // out of the URL query string if the user pasted Prowlarr's full URL.
+  const normaliseForm = (f) => {
+    const url = (f.url || '').trim();
+    let apiKey = (f.api_key || '').trim();
+    let cleanUrl = url;
+    try {
+      const u = new URL(url);
+      const embedded = u.searchParams.get('apikey') || u.searchParams.get('api_key');
+      if (embedded && !apiKey) apiKey = embedded;
+      u.search = '';
+      cleanUrl = u.toString().replace(/\/$/, '');
+    } catch {
+      // Leave URL as-is; backend will surface the validation error.
+    }
+    const priority = Number.isFinite(Number(f.priority)) ? Number(f.priority) : 25;
+    return { ...f, name: (f.name || '').trim(), url: cleanUrl, api_key: apiKey, priority };
+  };
+
   const createMutation = useMutation({
-    mutationFn: () => base44.entities.Indexer.create({ ...form, health_status: 'unknown' }),
+    mutationFn: () => base44.entities.Indexer.create({ ...normaliseForm(form), health_status: 'unknown' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['indexers'] });
       setAdding(false);
@@ -606,16 +625,22 @@ function IndexersTab() {
       setDraftTestResult(null);
       toast.success('Indexer added');
     },
+    onError: (err) => {
+      const code = err?.data?.error || err.message || 'Save failed';
+      toast.error(`Could not add indexer: ${code}`);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Indexer.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+    onError: (err) => toast.error(err?.data?.error || err.message || 'Delete failed'),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Indexer.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+    onError: (err) => toast.error(err?.data?.error || err.message || 'Update failed'),
   });
 
   const testDraft = async () => {
@@ -623,7 +648,8 @@ function IndexersTab() {
     setDraftTestResult(null);
     setTestingId('draft');
     try {
-      const res = await base44.indexers.testDraft({ name: form.name || 'Draft', url: form.url, api_key: form.api_key, type: form.type });
+      const cleaned = normaliseForm(form);
+      const res = await base44.indexers.testDraft({ name: cleaned.name || 'Draft', url: cleaned.url, api_key: cleaned.api_key, type: cleaned.type });
       setDraftTestResult({ ok: true, cats: res.categories?.length ?? 0 });
       toast.success('Connection successful');
     } catch (err) {
@@ -665,8 +691,12 @@ function IndexersTab() {
               </Select>
             </div>
             <div className="col-span-2"><Label className="text-xs">Torznab URL</Label><Input className="mt-1 font-mono text-xs" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="http://prowlarr:9696/1/api  or  http://jackett:9117/api/v2.0/indexers/all/results/torznab/api" /></div>
-            <div className="col-span-2"><Label className="text-xs">API Key</Label><Input className="mt-1 font-mono text-xs" value={form.api_key} onChange={e => setForm({ ...form, api_key: e.target.value })} type="password" placeholder="••••••••" /></div>
+            <div><Label className="text-xs">API Key</Label><Input className="mt-1 font-mono text-xs" value={form.api_key} onChange={e => setForm({ ...form, api_key: e.target.value })} type="password" placeholder="••••••••" /></div>
+            <div><Label className="text-xs">Priority</Label><Input className="mt-1" type="number" min="1" max="100" value={form.priority} onChange={e => setForm({ ...form, priority: Number(e.target.value) || 25 })} /></div>
           </div>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            Tip: if you paste Prowlarr's full URL (with <code>?apikey=...</code>), the API key is extracted automatically.
+          </p>
           {draftTestResult && (
             <div className={`mb-3 p-2 rounded text-xs flex items-center gap-2 ${draftTestResult.ok ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
               {draftTestResult.ok ? <Check className="w-3 h-3 shrink-0" /> : <AlertCircle className="w-3 h-3 shrink-0" />}
@@ -812,6 +842,22 @@ function MediaServersTab() {
     }
   };
 
+  const refreshMetadata = async () => {
+    const t = toast.loading('Refreshing posters from TMDB...');
+    try {
+      const res = await base44.mediaservers.refreshMetadata();
+      queryClient.invalidateQueries({ queryKey: ['movies'] });
+      queryClient.invalidateQueries({ queryKey: ['series'] });
+      queryClient.invalidateQueries({ queryKey: ['library-movies'] });
+      queryClient.invalidateQueries({ queryKey: ['library-series'] });
+      const r = res.result;
+      toast.success(`Refreshed metadata: ${r.movies_updated} movie(s), ${r.series_updated} series`, { id: t });
+    } catch (err) {
+      const code = err?.data?.error || err.message;
+      toast.error(code === 'no_api_key' ? 'TMDB API key not configured' : `Refresh failed: ${code}`, { id: t });
+    }
+  };
+
   const healthBadge = (status, msg) => {
     const cls = status === 'healthy'
       ? 'bg-green-500/15 text-green-400 border-green-500/30'
@@ -834,7 +880,10 @@ function MediaServersTab() {
         <p className="text-sm text-muted-foreground">
           {servers.length} server(s). Syncs mark your existing library as "Available" and flip matching requests.
         </p>
-        <Button size="sm" onClick={() => setAdding(true)} className="gap-1.5"><Plus className="w-4 h-4" />Add Server</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={refreshMetadata} className="gap-1.5"><RefreshCw className="w-4 h-4" />Refresh Posters</Button>
+          <Button size="sm" onClick={() => setAdding(true)} className="gap-1.5"><Plus className="w-4 h-4" />Add Server</Button>
+        </div>
       </div>
 
       {adding && (
