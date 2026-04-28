@@ -1,6 +1,7 @@
 import express from 'express';
 import { db, newId, tableFor, hydrate } from './db.js';
 import { requireAuth, requireRole } from './auth.js';
+import { fetchTmdbDetails, isTmdbConfigured } from './tmdb.js';
 
 const SERVER_TABLE = tableFor('MediaServer');
 const MOVIE_TABLE = tableFor('Movie');
@@ -190,14 +191,35 @@ function findByTmdbId(table, tmdbId) {
   return row ? { row, data: JSON.parse(row.data) } : null;
 }
 
-function upsertMediaItem(table, item, userId) {
+async function upsertMediaItem(table, item, userId, mediaType) {
   const existing = findByTmdbId(table, item.tmdb_id);
   const now = new Date().toISOString();
+  // Fetch TMDB details once per upsert so newly-added items have artwork and
+  // existing items can backfill any missing poster/backdrop on next sync.
+  const tmdb = await fetchTmdbDetails(mediaType, item.tmdb_id);
   if (existing) {
-    if (existing.data.library_status === 'available') return { changed: false, created: false };
-    const next = { ...existing.data, library_status: 'available' };
+    const merged = { ...existing.data };
+    let changed = false;
+    if (existing.data.library_status !== 'available') {
+      merged.library_status = 'available';
+      changed = true;
+    }
+    if (tmdb) {
+      const fillIfMissing = ['poster_url', 'backdrop_url', 'overview', 'genres', 'rating', 'vote_count', 'runtime', 'original_language'];
+      for (const k of fillIfMissing) {
+        if (tmdb[k] != null && (merged[k] == null || merged[k] === '' || (Array.isArray(merged[k]) && merged[k].length === 0))) {
+          merged[k] = tmdb[k];
+          changed = true;
+        }
+      }
+      if (!merged.year && tmdb.year) {
+        merged.year = tmdb.year;
+        changed = true;
+      }
+    }
+    if (!changed) return { changed: false, created: false };
     db.prepare(`UPDATE ${table} SET data = ?, updated_date = ? WHERE id = ?`).run(
-      JSON.stringify(next),
+      JSON.stringify(merged),
       now,
       existing.row.id,
     );
@@ -205,10 +227,17 @@ function upsertMediaItem(table, item, userId) {
   }
   const id = newId();
   const data = {
-    title: item.title,
+    title: tmdb?.title || item.title,
     tmdb_id: String(item.tmdb_id),
-    year: item.year || undefined,
-    overview: item.overview || undefined,
+    year: item.year || tmdb?.year || undefined,
+    overview: item.overview || tmdb?.overview || undefined,
+    poster_url: tmdb?.poster_url || undefined,
+    backdrop_url: tmdb?.backdrop_url || undefined,
+    rating: tmdb?.rating || undefined,
+    vote_count: tmdb?.vote_count || undefined,
+    genres: tmdb?.genres,
+    runtime: tmdb?.runtime || undefined,
+    original_language: tmdb?.original_language || undefined,
     library_status: 'available',
     monitored: true,
     added_date: now,
@@ -269,16 +298,67 @@ async function syncServer(server, userId) {
   result.errors.push(...(library.errors || []));
 
   for (const m of library.movies) {
-    const r = upsertMediaItem(MOVIE_TABLE, m, userId);
+    const r = await upsertMediaItem(MOVIE_TABLE, m, userId, 'movie');
     if (r.changed) result.movies_matched += 1;
     if (r.created) result.created_movies += 1;
     result.requests_updated += flipRequestsAvailable(m.tmdb_id, 'movie');
   }
   for (const s of library.series) {
-    const r = upsertMediaItem(SERIES_TABLE, s, userId);
+    const r = await upsertMediaItem(SERIES_TABLE, s, userId, 'series');
     if (r.changed) result.series_matched += 1;
     if (r.created) result.created_series += 1;
     result.requests_updated += flipRequestsAvailable(s.tmdb_id, 'series');
+  }
+  return result;
+}
+
+// Backfill posters/backdrops for items that have a tmdb_id but no poster_url.
+// Called from POST /api/mediaservers/refresh-metadata. Safe to re-run.
+async function backfillMetadata({ limit = 1000 } = {}) {
+  if (!isTmdbConfigured()) {
+    const err = new Error('TMDB API key not configured');
+    err.status = 400;
+    err.code = 'no_api_key';
+    throw err;
+  }
+  const result = { movies_updated: 0, series_updated: 0, errors: [] };
+  for (const [table, mediaType, bucket] of [
+    [MOVIE_TABLE, 'movie', 'movies_updated'],
+    [SERIES_TABLE, 'series', 'series_updated'],
+  ]) {
+    const rows = db.prepare(
+      `SELECT * FROM ${table}
+       WHERE json_extract(data, '$.tmdb_id') IS NOT NULL
+         AND (json_extract(data, '$.poster_url') IS NULL
+              OR json_extract(data, '$.poster_url') = '')
+       LIMIT ?`,
+    ).all(limit).map(hydrate);
+    for (const row of rows) {
+      try {
+        const tmdb = await fetchTmdbDetails(mediaType, row.tmdb_id);
+        if (!tmdb) continue;
+        const merged = { ...row };
+        delete merged.id; delete merged.created_date; delete merged.updated_date; delete merged.created_by;
+        const fields = ['poster_url', 'backdrop_url', 'overview', 'genres', 'rating', 'vote_count', 'runtime', 'original_language'];
+        let changed = false;
+        for (const k of fields) {
+          if (tmdb[k] != null && (merged[k] == null || merged[k] === '' || (Array.isArray(merged[k]) && merged[k].length === 0))) {
+            merged[k] = tmdb[k];
+            changed = true;
+          }
+        }
+        if (!merged.year && tmdb.year) { merged.year = tmdb.year; changed = true; }
+        if (!changed) continue;
+        db.prepare(`UPDATE ${table} SET data = ?, updated_date = ? WHERE id = ?`).run(
+          JSON.stringify(merged),
+          new Date().toISOString(),
+          row.id,
+        );
+        result[bucket] += 1;
+      } catch (err) {
+        result.errors.push(`${mediaType} ${row.tmdb_id}: ${err.message}`);
+      }
+    }
   }
   return result;
 }
@@ -397,6 +477,15 @@ mediaServersRouter.post('/sync-all', requireRole('admin'), async (req, res, next
       }
     }
     res.json({ ok: true, servers: results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+mediaServersRouter.post('/refresh-metadata', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await backfillMetadata({ limit: Number(req.body?.limit) || 1000 });
+    res.json({ ok: true, result });
   } catch (err) {
     next(err);
   }

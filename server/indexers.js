@@ -86,11 +86,27 @@ export async function torznabFetch(indexer, params) {
   // Strip any existing query string from the stored URL
   const base = indexer.url.split('?')[0].replace(/\/+$/, '');
   const qs = new URLSearchParams({ apikey: indexer.api_key || '', ...params });
-  const res = await fetch(`${base}?${qs}`, {
-    headers: { 'User-Agent': 'NexusMedia/1.0', Accept: 'application/rss+xml, text/xml, */*' },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${indexer.name}`);
+  let res;
+  try {
+    res = await fetch(`${base}?${qs}`, {
+      headers: { 'User-Agent': 'NexusMedia/1.0', Accept: 'application/rss+xml, text/xml, */*' },
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (err) {
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+      throw new Error(`Connection to ${indexer.name || indexer.url} timed out`);
+    }
+    throw new Error(`Could not reach ${indexer.name || indexer.url}: ${err.message}`);
+  }
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`Authentication failed (${res.status}) — check the API key`);
+    }
+    if (res.status === 404) {
+      throw new Error(`404 Not Found — verify the Torznab URL points at the /api endpoint`);
+    }
+    throw new Error(`HTTP ${res.status} from ${indexer.name || indexer.url}`);
+  }
   return res.text();
 }
 
@@ -158,10 +174,15 @@ function saveHealth(id, health_status, health_message) {
 // ---------------------------------------------------------------------------
 
 async function testIndexer(indexer) {
+  if (!indexer.url) throw new Error('url required');
   const xml = await torznabFetch(indexer, { t: 'caps' });
   const cats = parseCapsXml(xml);
+  if (/<error[\s>]/i.test(xml)) {
+    const m = /<error[^>]*description="([^"]+)"/i.exec(xml);
+    throw new Error(m ? `Indexer error: ${m[1]}` : 'Indexer returned an error');
+  }
   if (!xml.includes('<caps>') && !xml.includes('<channel>')) {
-    throw new Error('Response does not look like a Torznab caps reply');
+    throw new Error('Response does not look like a Torznab caps reply (check the URL points at the /api endpoint)');
   }
   return { ok: true, categories: cats };
 }
